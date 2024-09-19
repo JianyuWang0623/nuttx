@@ -2,6 +2,8 @@
 Thermal Framework
 =================
 
+Thermal Framework is a subsystem in the kernel that provides interfaces for thermal management of devices. It is designed to monitor the temperature of various components and adjust their operating conditions to prevent overheating. The framework is responsible for controlling the cooling devices, such as fans and heatsinks, to maintain the temperature within safe limits. It provides a unified thermal management interface that can be used by different thermal drivers. The drivers can be implemented by hardware vendors to support their specific thermal management requirements.
+
 Brief
 =====
 1. Support Zone, Cooling Device and Governor
