@@ -81,6 +81,12 @@ static const struct ft5x06_config_s g_ft5x06_config =
 #endif
   .wakeup    = imxrt_ft5x06_wakeup,
   .nreset    = imxrt_ft5x06_nreset
+  .lower =
+    {
+#ifdef CONFIG_IMXRT1064_EVK_TOUCHSCREEN_SWAPXY
+      .flags = TOUCH_FLAG_SWAPXY,
+#endif
+    }
 };
 
 #ifndef CONFIG_FT5X06_POLLMODE
