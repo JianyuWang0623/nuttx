@@ -511,6 +511,12 @@
 #define SNIOC_COLD_START              _SNIOC(0X00A7)
 #define SNIOC_FULL_COLD_START         _SNIOC(0X00A8)
 
+/* Command:      SNIOC_GNSS_CREFS
+ * Description:  Get the reference count of the GNSS driver.
+ */
+
+#define SNIOC_GNSS_CREFS              _SNIOC(0X00A9)
+
 /****************************************************************************
  * Public types
  ****************************************************************************/

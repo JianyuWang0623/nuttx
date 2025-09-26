@@ -210,13 +210,34 @@ static int gnss_control(FAR struct sensor_lowerhalf_s *lower,
 {
   FAR struct gnss_sensor_s *dev = (FAR struct gnss_sensor_s *)lower;
   FAR struct gnss_upperhalf_s *upper = dev->upper;
+  int ret = 0;
 
-  if (upper->lower->ops->control == NULL)
+  switch (cmd)
     {
-      return -ENOTTY;
+      case SNIOC_GNSS_CREFS:
+        {
+          nxmutex_lock(&upper->lock);
+          *(FAR uint8_t *)(uintptr_t)arg = upper->crefs;
+          nxmutex_unlock(&upper->lock);
+        }
+        break;
+
+      default:
+        {
+          if (upper->lower->ops->control == NULL)
+            {
+              ret = -ENOTTY;
+            }
+          else
+            {
+              ret = upper->lower->ops->control(upper->lower, filep,
+                                               cmd, arg);
+            }
+        }
+        break;
     }
 
-  return upper->lower->ops->control(upper->lower, filep, cmd, arg);
+  return ret;
 }
 
 static int gnss_open(FAR struct file *filep)
