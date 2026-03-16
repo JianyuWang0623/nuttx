@@ -465,6 +465,39 @@ config OV2640_REGDEBUG
 
 endif # VIDEO_OV2640
 
+config VIDEO_GC0308
+	bool "GC0308 camera chip"
+	default n
+	select I2C
+	---help---
+		GC0308 VGA CMOS image sensor with DVP interface.
+
+if VIDEO_GC0308
+
+choice
+	prompt "GC0308 output resolution"
+	default VIDEO_GC0308_QVGA
+
+config VIDEO_GC0308_VGA
+	bool "VGA (640x480)"
+	---help---
+		Native VGA resolution, no subsample.
+		Requires ~600KB frame buffer (PSRAM recommended).
+
+config VIDEO_GC0308_QVGA
+	bool "QVGA (320x240)"
+	---help---
+		QVGA via 1/2 subsample. ~150KB frame buffer.
+
+config VIDEO_GC0308_QQVGA
+	bool "QQVGA (160x120)"
+	---help---
+		QQVGA via 1/4 subsample. ~38KB frame buffer.
+
+endchoice
+
+endif # VIDEO_GC0308
+
 config GOLDFISH_CAMERA
 	bool "Goldfish camera support"
 	depends on VIDEO
