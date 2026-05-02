@@ -646,6 +646,14 @@ void __esp_start(void)
   wdt_hal_disable(&rwdt_ctx);
   wdt_hal_write_protect_enable(&rwdt_ctx);
 
+  /* The bootloader also enables MWDT0 (Timer Group 0 Main WDT) as a task
+   * watchdog.  Disable it as well to prevent spurious resets during NuttX
+   * initialization (e.g. PHY link-wait polling in the EMAC driver).
+   */
+
+  wdt_hal_context_t mwdt_ctx;
+  wdt_hal_init(&mwdt_ctx, WDT_MWDT0, 0, false);
+
   showprogress("C");
 
   /* Initialize onboard resources */

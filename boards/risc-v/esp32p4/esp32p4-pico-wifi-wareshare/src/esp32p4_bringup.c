@@ -109,6 +109,10 @@
 #  include "esp_board_adc.h"
 #endif
 
+#ifdef CONFIG_ESPRESSIF_EMAC
+#  include "espressif/esp_emac.h"
+#endif
+
 #ifdef CONFIG_SYSTEM_NXDIAG_ESPRESSIF_CHIP_WO_TOOL
 #  include "espressif/esp_nxdiag.h"
 #endif
@@ -429,6 +433,14 @@ int esp_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: board_adc_init failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_ESPRESSIF_EMAC
+  ret = esp_emac_init();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: esp_emac_init failed: %d\n", ret);
     }
 #endif
 

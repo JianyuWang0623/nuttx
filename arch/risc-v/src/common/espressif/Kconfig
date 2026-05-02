@@ -4206,4 +4206,58 @@ config ESPRESSIF_TEMP_THREAD_STACKSIZE
 
 endmenu # ESPRESSIF_TEMP
 
+menu "Ethernet (EMAC) Configuration"
+	depends on ESPRESSIF_EMAC
+
+config ESPRESSIF_ETH_MDCPIN
+	int "MDC GPIO pin"
+	default 23
+	---help---
+		GPIO pin number for the EMAC MDC (Management Data Clock) signal.
+		This pin is routed via the GPIO matrix.
+
+config ESPRESSIF_ETH_MDIOPIN
+	int "MDIO GPIO pin"
+	default 18
+	---help---
+		GPIO pin number for the EMAC MDIO (Management Data I/O) signal.
+		This pin is routed via the GPIO matrix.
+
+config ESPRESSIF_ETH_PHY_ADDR
+	int "PHY address"
+	default 1
+	range 0 31
+	---help---
+		SMI address of the Ethernet PHY chip on the MDIO bus.
+
+config ESPRESSIF_ETH_ENABLE_PHY_RSTPIN
+	bool "Enable PHY hardware reset pin"
+	default y
+	---help---
+		Enable a GPIO pin to perform hardware reset of the Ethernet PHY.
+
+config ESPRESSIF_ETH_PHY_RSTPIN
+	int "PHY reset GPIO pin"
+	depends on ESPRESSIF_ETH_ENABLE_PHY_RSTPIN
+	default 5
+	---help---
+		GPIO pin number connected to the PHY reset line.
+
+config ESPRESSIF_ETH_NRXDESC
+	int "Number of RX DMA descriptors"
+	default 9
+	range 4 32
+	---help---
+		Number of receive DMA descriptors. More descriptors use more
+		memory but can improve throughput.
+
+config ESPRESSIF_ETH_NTXDESC
+	int "Number of TX DMA descriptors"
+	default 8
+	range 4 32
+	---help---
+		Number of transmit DMA descriptors.
+
+endmenu # Ethernet (EMAC) Configuration
+
 endif

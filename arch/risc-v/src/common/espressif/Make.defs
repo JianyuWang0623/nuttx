@@ -192,7 +192,9 @@ endif
 ifeq ($(CONFIG_ESPRESSIF_USE_LP_CORE),y)
 	CHIP_CSRCS += esp_ulp.c
 endif
-
+ifeq ($(CONFIG_ESPRESSIF_EMAC),y)
+	CHIP_CSRCS += esp_emac.c
+endif
 ifeq ($(CONFIG_PM),y)
 	ifneq ($(CONFIG_ARCH_CUSTOM_PMINIT),y)
 		CHIP_CSRCS += esp_pm_initialize.c

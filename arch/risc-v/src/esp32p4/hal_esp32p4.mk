@@ -442,3 +442,10 @@ ifeq ($(CONFIG_ESPRESSIF_IDF_ENV_FPGA),y)
   LDFLAGS += -u esp_common_include_fpga_overrides_clk
   LDFLAGS += -u esp_common_include_fpga_overrides_rng
 endif
+
+ifeq ($(CONFIG_ESPRESSIF_EMAC),y)
+  INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)esp_hal_emac$(DELIM)include
+  INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)esp_hal_emac$(DELIM)$(CHIP_SERIES)$(DELIM)include
+  CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)esp_hal_emac$(DELIM)emac_hal.c
+  CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)esp_hal_emac$(DELIM)$(CHIP_SERIES)$(DELIM)emac_periph.c
+endif
