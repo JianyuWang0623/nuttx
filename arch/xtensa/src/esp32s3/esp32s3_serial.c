@@ -102,7 +102,9 @@
 #endif /* CONSOLE_UART */
 
 #ifdef CONFIG_ESP32S3_USBSERIAL
-#  define CONSOLE_DEV           g_uart_usbserial
+#  ifndef CONSOLE_UART
+#    define CONSOLE_DEV         g_uart_usbserial
+#  endif
 #  define TTYACM0_DEV           g_uart_usbserial
 #endif
 
