@@ -138,6 +138,10 @@ void board_late_initialize(void)
   mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
 #endif
 
+#ifdef CONFIG_FS_BINFS
+  mount(NULL, "/bin", "binfs", 0, NULL);
+#endif
+
 #ifdef CONFIG_DRIVERS_VIRTIO_MMIO
 #ifndef CONFIG_BOARD_EARLY_INITIALIZE
   qemu_virtio_register_mmio_devices();
