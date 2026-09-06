@@ -36,6 +36,7 @@
 #include <nuttx/fs/fs.h>
 
 #include "inode/inode.h"
+#include "fs_heap.h"
 
 /****************************************************************************
  * Private Function Prototypes
@@ -359,6 +360,30 @@ static int _inode_checkpath(const char *path)
 }
 
 /****************************************************************************
+ * Name: inode_search_getbuffer
+ *
+ * Description:
+ *   Return a writable buffer of at least 'buflen' bytes whose lifetime
+ *   extends to the caller's RELEASE_SEARCH().  Short paths (the common
+ *   case) are served from the descriptor's inline buffer with no heap
+ *   allocation; longer paths fall back to the file system heap.
+ *
+ ****************************************************************************/
+
+static FAR char *inode_search_getbuffer(FAR struct inode_search_s *desc,
+                                         size_t buflen)
+{
+#if CONFIG_FS_INODE_SEARCH_IOBUFSIZE > 0
+  if (buflen <= sizeof(desc->iobuffer))
+    {
+      return desc->iobuffer;
+    }
+#endif
+
+  return fs_heap_malloc(buflen);
+}
+
+/****************************************************************************
  * Name: _inode_search
  *
  * Description:
@@ -424,12 +449,7 @@ static int _inode_search(FAR struct inode_search_s *desc)
           buflen = strlen(desc->path) + 1;
         }
 
-      if (buflen < PATH_MAX)
-        {
-          buflen = PATH_MAX;
-        }
-
-      desc->buffer = lib_get_tempbuffer(buflen);
+      desc->buffer = inode_search_getbuffer(desc, buflen);
       if (desc->buffer == NULL)
         {
           return -ENOMEM;
@@ -531,6 +551,7 @@ static int _inode_search(FAR struct inode_search_s *desc)
 
               if (INODE_IS_SOFTLINK(inode))
                 {
+                  struct inode_search_s linkdesc;
                   int status;
 
                   /* If this intermediate inode in the is a soft link, then
@@ -539,19 +560,22 @@ static int _inode_search(FAR struct inode_search_s *desc)
                    * instead.
                    */
 
-                  status = _inode_linktarget(inode, desc);
+                  SETUP_SEARCH(&linkdesc, NULL, true);
+
+                  status = _inode_linktarget(inode, &linkdesc);
                   if (status < 0)
                     {
                       /* Probably means that the target of the symbolic link
                        * does not exist.
                        */
 
+                      RELEASE_SEARCH(&linkdesc);
                       ret = status;
                       break;
                     }
                   else
                     {
-                      FAR struct inode *newnode = desc->node;
+                      FAR struct inode *newnode = linkdesc.node;
 
                       if (newnode != inode)
                         {
@@ -570,15 +594,15 @@ static int _inode_search(FAR struct inode_search_s *desc)
                                */
 
                               inode   = newnode;
-                              above   = desc->parent;
-                              left    = desc->peer;
+                              above   = linkdesc.parent;
+                              left    = linkdesc.peer;
                               ret     = OK;
 
-                              if (*desc->relpath != '\0')
+                              if (*linkdesc.relpath != '\0')
                                 {
                                   FAR char *buffer = NULL;
 
-                                  buffer = lib_get_tempbuffer(PATH_MAX);
+                                  buffer = fs_heap_malloc(PATH_MAX);
                                   if (buffer == NULL)
                                     {
                                       ret = -ENOMEM;
@@ -586,10 +610,15 @@ static int _inode_search(FAR struct inode_search_s *desc)
                                   else
                                     {
                                       snprintf(buffer, PATH_MAX, "%s/%s",
-                                               desc->relpath, name);
-                                      lib_put_tempbuffer(desc->buffer);
+                                               linkdesc.relpath, name);
+                                      if (INODE_SEARCH_IS_HEAP(desc))
+                                        {
+                                          fs_heap_free(desc->buffer);
+                                        }
+
                                       desc->buffer = buffer;
                                       relpath = buffer;
+                                      name    = buffer;
                                       ret = OK;
                                     }
                                 }
@@ -598,12 +627,18 @@ static int _inode_search(FAR struct inode_search_s *desc)
                                   relpath = name;
                                 }
 
+                              RELEASE_SEARCH(&linkdesc);
                               break;
                             }
 
                           /* Continue from this new inode. */
 
+                          RELEASE_SEARCH(&linkdesc);
                           inode = newnode;
+                        }
+                      else
+                        {
+                          RELEASE_SEARCH(&linkdesc);
                         }
                     }
                 }

@@ -140,6 +140,17 @@ config SENDFILE_BUFSIZE
 	---help---
 		Size of the I/O buffer to allocate in sendfile().  Default: 512b
 
+config FS_INODE_SEARCH_IOBUFSIZE
+	int "inode search inline path buffer size"
+	default 64
+	---help---
+		Size of the path-expansion buffer embedded in each inode search
+		descriptor.  inode_search() needs a writable, caller-lifetime
+		buffer to hold the canonicalized path; when the path fits in this
+		inline buffer no heap allocation is performed, which is the common
+		case for short paths such as /dev/console.  Paths that do not fit
+		fall back to a heap allocation.  Set to 0 to always use the heap.
+
 config FS_HEAPSIZE
 	int "Independent heap bytes"
 	default 0

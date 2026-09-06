@@ -41,6 +41,8 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/lib/lib.h>
 
+#include "fs_heap.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -58,14 +60,20 @@
     } \
   while (0)
 
+#if CONFIG_FS_INODE_SEARCH_IOBUFSIZE > 0
+#  define INODE_SEARCH_IS_HEAP(d) ((d)->buffer != (d)->iobuffer)
+#else
+#  define INODE_SEARCH_IS_HEAP(d) (true)
+#endif
+
 #define RELEASE_SEARCH(d) \
   do \
     { \
-      if ((d)->buffer != NULL) \
+      if ((d)->buffer != NULL && INODE_SEARCH_IS_HEAP(d)) \
         { \
-          lib_put_tempbuffer((d)->buffer); \
-          (d)->buffer  = NULL; \
+          fs_heap_free((d)->buffer); \
         } \
+      (d)->buffer = NULL; \
     } \
   while (0)
 
@@ -133,6 +141,11 @@
  *           - OUTPUT: May hold an allocated intermediate path which is
  *                     probably of no interest to the caller unless it holds
  *                     the relpath.
+ *
+ * Operate on a descriptor by pointer; do not copy it by value once
+ * inode_search() has run.  'buffer' (and thus 'path'/'relpath') may point
+ * into this same structure's 'iobuffer', so a bitwise copy would leave the
+ * copy referencing the original's storage.
  */
 
 struct inode_search_s
@@ -142,8 +155,11 @@ struct inode_search_s
   FAR struct inode *peer;    /* Node to the "left" for the found inode */
   FAR struct inode *parent;  /* Node "above" the found inode */
   FAR const char *relpath;   /* Relative path into the mountpoint */
-  FAR char *buffer;          /* Path expansion buffer */
+  FAR char *buffer;          /* Path expansion buffer (may be iobuffer) */
   bool nofollow;             /* true: Don't follow terminal soft link */
+#if CONFIG_FS_INODE_SEARCH_IOBUFSIZE > 0
+  char iobuffer[CONFIG_FS_INODE_SEARCH_IOBUFSIZE]; /* Inline expansion buffer */
+#endif
 };
 
 /* Callback used by foreach_inode to traverse all inodes in the pseudo-
