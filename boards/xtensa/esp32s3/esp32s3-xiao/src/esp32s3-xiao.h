@@ -98,5 +98,18 @@ int board_i2c_init(void);
 int board_lsm6ds3trc_initialize(int devno, int busno);
 #endif
 
+/****************************************************************************
+ * Name: esp32s3_camera_initialize
+ *
+ * Description:
+ *   Initialize the OV3660 camera on the XIAO ESP32-S3 Sense expansion
+ *   board and register it as a V4L2 capture device (/dev/video0).
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ESP32S3_CAM
+int esp32s3_camera_initialize(void);
+#endif
+
 #endif /* __ASSEMBLY__ */
 #endif /* __BOARDS_XTENSA_ESP32S3_ESP32S3_XIAO_SRC_ESP32S3_XIAO_H */
