@@ -195,6 +195,59 @@ D2/GPIO3   Input    /dev/gpio2
 
 
 
+ov3660
+------
+.. warning::
+   This configuration only applies to the **Seeed Studio XIAO ESP32S3
+   Sense** variant with the camera/microphone expansion board attached.
+   The plain (non-Sense) XIAO ESP32S3 has no camera connector and will
+   not boot into anything useful with this defconfig beyond the shell.
+
+Enables the on-board DVP camera on the XIAO ESP32S3 **Sense** expansion
+board, using the ``VIDEO_OV3660`` sensor driver and the ESP32-S3 CAM
+(DVP) capture controller (``ESP32S3_CAM``).  A ``/dev/video0`` V4L2
+capture device is registered at boot; use ``nxcamera``
+(``input``/``output``/``stream`` commands) to capture frames.
+
+.. warning::
+   Seeed has shipped at least two different camera sensors on the Sense
+   expansion board over time: earlier units use the (now discontinued)
+   OV2640, while current production units ship the **OV3660**
+   (2048x1536 native resolution) documented here.  This configuration
+   only supports OV3660 -- there is no OV2640 driver in NuttX.  If your
+   board predates this change, this defconfig will not detect the
+   sensor (``ov3660_is_available()`` will fail).
+
+Camera pinout (DVP parallel bus + a dedicated SCCB I2C bus, distinct
+from the main I2C header pins D4/D5 above):
+
+===== ========== ==========
+GPIO  Signal     Notes
+===== ========== ==========
+10    XCLK       Sensor clock output
+13    PCLK       Pixel clock (input)
+38    VSYNC      Frame sync (input)
+47    HREF       Line valid (input; labeled HSYNC in some vendor docs)
+15    D0 / Y2    DVP data bit 0
+17    D1 / Y3    DVP data bit 1
+18    D2 / Y4    DVP data bit 2
+16    D3 / Y5    DVP data bit 3
+14    D4 / Y6    DVP data bit 4
+12    D5 / Y7    DVP data bit 5
+11    D6 / Y8    DVP data bit 6
+48    D7 / Y9    DVP data bit 7
+39    SCL        SCCB clock (ESP32S3_I2C1)
+40    SDA        SCCB data (ESP32S3_I2C1)
+===== ========== ==========
+
+.. code-block:: console
+
+  nsh> nxcamera
+  nxcamera> input /dev/video0
+  nxcamera> output /tmp/frame.raw
+  nxcamera> stream
+  nxcamera> stop
+  nxcamera> quit
 
 
 
