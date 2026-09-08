@@ -498,6 +498,16 @@ config VIDEO_GC0308
 	---help---
 		GC0308 VGA CMOS image sensor with DVP interface.
 
+config VIDEO_OV3660
+	bool "OV3660 camera chip"
+	default n
+	select I2C
+	---help---
+		OV3660 3MP (2048x1536) CMOS image sensor with an 8-bit DVP
+		parallel interface and SCCB (I2C-like) control bus.  Only
+		the sensor's binned 4:3 output modes (<= 1024x768) are
+		supported by this driver.
+
 config GOLDFISH_CAMERA
 	bool "Goldfish camera support"
 	depends on VIDEO

@@ -64,6 +64,10 @@ ifeq ($(CONFIG_VIDEO_GC0308),y)
   CSRCS += gc0308.c
 endif
 
+ifeq ($(CONFIG_VIDEO_OV3660),y)
+  CSRCS += ov3660.c
+endif
+
 endif
 
 ifeq ($(CONFIG_GOLDFISH_FB),y)
