@@ -530,15 +530,15 @@ endif # RP2040_BOARD_HAS_WS2812
 #  FLASH File System Configuration
 #####################################################################
 
-if RP2040_FLASH_FILE_SYSTEM
-
 config RP2040_FLASH_LENGTH
 	int "Size of flash memory in bytes."
 	default 2097152
 	---help---
-		This is the overall amount of flash memory on the board.
-
-endif # RP2040_FLASH_FILE_SYSTEM
+		This is the overall amount of flash memory on the board.  It is a
+		hardware property of the board and is used both by the smartfs
+		file-system window and by the full-chip MTD instance backing the
+		partition layer, so it is available independently of
+		RP2040_FLASH_FILE_SYSTEM.
 
 #####################################################################
 #  LCD Configuration

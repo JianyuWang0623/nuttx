@@ -92,7 +92,15 @@ ifeq ($(CONFIG_WATCHDOG),y)
 CHIP_CSRCS += rp2040_wdt.c
 endif
 
+# The flash MTD driver provides both the legacy smartfs window
+# (rp2040_flash_mtd_initialize) and a full-chip instance
+# (rp2040_flash_mtd_initialize_full) used by the partition layer, so build it
+# whenever MTD is enabled, not only for the smartfs file-system option.
+
 ifeq ($(CONFIG_RP2040_FLASH_FILE_SYSTEM),y)
+CHIP_CSRCS += rp2040_flash_mtd.c
+CHIP_ASRCS += rp2040_flash_initialize.S
+else ifeq ($(CONFIG_MTD),y)
 CHIP_CSRCS += rp2040_flash_mtd.c
 CHIP_ASRCS += rp2040_flash_initialize.S
 endif

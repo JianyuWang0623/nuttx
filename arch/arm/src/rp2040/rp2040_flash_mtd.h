@@ -35,3 +35,14 @@
  ****************************************************************************/
 
 struct mtd_dev_s *rp2040_flash_mtd_initialize(void);
+
+/****************************************************************************
+ * Name: rp2040_flash_mtd_initialize_full
+ *
+ * Description:
+ *   Return an MTD instance that spans the whole flash chip (offset 0 ..
+ *   CONFIG_RP2040_FLASH_LENGTH) for use by the partition layer.
+ *
+ ****************************************************************************/
+
+struct mtd_dev_s *rp2040_flash_mtd_initialize_full(void);

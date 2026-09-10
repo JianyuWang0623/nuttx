@@ -104,6 +104,11 @@ typedef struct rp2040_flash_dev_s
   struct mtd_dev_s mtd_dev;                 /* Embedded mdt_dev structure */
   mutex_t          lock;                    /* file access serialization  */
   uint32_t         boot_2[BOOT_2_SIZE / 4]; /* RAM copy of boot_2         */
+  off_t            offset;                  /* Byte offset of this MTD    */
+                                            /* window within flash        */
+  size_t           nblocks;                 /* Number of erase blocks     */
+  uintptr_t        readbase;                /* XIP base used for reads    */
+                                            /* (cached vs nocache alias)  */
 } rp2040_flash_dev_t;
 
 typedef void (*connect_internal_flash_f)(void);
@@ -194,7 +199,37 @@ static struct rp2040_flash_dev_s my_dev =
   .lock = NXMUTEX_INITIALIZER,
 };
 
+/* A second MTD instance that spans the whole flash chip (offset 0 ..
+ * CONFIG_RP2040_FLASH_LENGTH).  Unlike my_dev, which is confined to the
+ * smartfs window past the NuttX image, this one is used by the partition
+ * layer (txtable) to carve /dev/bootloader, /dev/ap, etc. across the full
+ * device.  NOTE: writing/erasing into the region that holds the running
+ * bootloader image is caller's responsibility (see PER-167 D2).
+ */
+
+static struct rp2040_flash_dev_s my_dev_full =
+{
+  .mtd_dev =
+  {
+    rp2040_flash_erase,
+    rp2040_flash_block_read,
+    rp2040_flash_block_write,
+    rp2040_flash_byte_read,
+#ifdef CONFIG_MTD_BYTE_WRITE
+    NULL,
+#endif
+    rp2040_flash_ioctl,
+#ifdef CONFIG_FTL_BBM
+    NULL,
+    NULL,
+#endif
+    "rp_flash_full"
+  },
+  .lock = NXMUTEX_INITIALIZER,
+};
+
 static bool initialized = false;
+static bool initialized_full = false;
 
 static struct
 {
@@ -451,7 +486,7 @@ static int     rp2040_flash_erase(struct mtd_dev_s *dev,
 
   finfo("FLASH: erase block:  %8u (0x%08x) count:%5u (0x%08X)\n",
          (unsigned)(startblock),
-         (unsigned)(FLASH_BLOCK_SIZE * startblock + FLASH_START_OFFSET),
+         (unsigned)(FLASH_BLOCK_SIZE * startblock + rp_dev->offset),
          nblocks,
          FLASH_BLOCK_SIZE * nblocks);
 
@@ -472,7 +507,7 @@ static int     rp2040_flash_erase(struct mtd_dev_s *dev,
 
   flags = enter_critical_section();
 
-  do_erase(FLASH_BLOCK_SIZE * startblock + FLASH_START_OFFSET,
+  do_erase(FLASH_BLOCK_SIZE * startblock + rp_dev->offset,
             FLASH_BLOCK_SIZE * nblocks);
 
   leave_critical_section(flags);
@@ -509,20 +544,24 @@ static ssize_t rp2040_flash_block_read(struct mtd_dev_s *dev,
 
   finfo("FLASH: read sector:  %8u (0x%08x) count:%5u\n",
          (unsigned)(startblock),
-         (unsigned)(FLASH_SECTOR_SIZE * startblock + FLASH_START_OFFSET),
+         (unsigned)(FLASH_SECTOR_SIZE * startblock + rp_dev->offset),
          nblocks);
 
   start  = FLASH_SECTOR_SIZE * startblock;
   length = FLASH_SECTOR_SIZE * nblocks;
 
-  /* This reads starting at XIP_NOCACHE_NOALLOC_BASE to bypass the
-   * XIP cache.  This is done because flash programming does not update
-   * the cache and we don't want to read stale data.  Since we expect
-   * access to the flash filesystem to be rather infrequent this isn't
-   * really much of a burden.
+  /* Read through rp_dev->readbase.  The smartfs window uses the
+   * XIP_NOCACHE_NOALLOC_BASE alias to bypass the XIP cache (so it never sees
+   * stale data after programming).  The full-chip instance instead uses the
+   * cached XIP_BASE alias: reading flash offset 0 (boot2 / the XIP config
+   * region) through the nocache alias hangs the core on RP2040 (verified on
+   * target, PER-167 W2), and the full-chip window is read-mostly, so the
+   * cached alias is both safe and sufficient.
    */
 
-  memcpy(buffer, FLASH_START_READ + start, length);
+  memcpy(buffer,
+         (const uint8_t *)(rp_dev->readbase + rp_dev->offset) + start,
+         length);
 
   /* Update the file position */
 
@@ -560,7 +599,7 @@ static ssize_t rp2040_flash_block_write(struct mtd_dev_s *dev,
 
   flags = enter_critical_section();
 
-  do_write(FLASH_SECTOR_SIZE * startblock + FLASH_START_OFFSET,
+  do_write(FLASH_SECTOR_SIZE * startblock + rp_dev->offset,
            buffer,
            FLASH_SECTOR_SIZE * nblocks);
 
@@ -572,7 +611,7 @@ static ssize_t rp2040_flash_block_write(struct mtd_dev_s *dev,
 
   finfo("FLASH: write sector: %8u (0x%08x) count:%5u\n",
          (unsigned)(startblock),
-         (unsigned)(FLASH_SECTOR_SIZE * startblock + FLASH_START_OFFSET),
+         (unsigned)(FLASH_SECTOR_SIZE * startblock + rp_dev->offset),
          nblocks);
 
 #ifdef CONFIG_DEBUG_FS_INFO
@@ -616,17 +655,16 @@ static ssize_t rp2040_flash_byte_read(struct mtd_dev_s *dev,
 
   finfo("FLASH: read bytes:   %8u (0x%08x) count:%5u\n",
          (unsigned)(offset),
-         (unsigned)(offset + FLASH_START_OFFSET),
+         (unsigned)(offset + rp_dev->offset),
          nbytes);
 
-  /* This reads starting at XIP_NOCACHE_NOALLOC_BASE to bypass the
-   * XIP cache.  This is done because flash programming does not update
-   * the cache and we don't want to read stale data.  Since we expect
-   * access to the flash filesystem to be rather infrequent this isn't
-   * really much of a burden.
+  /* Read through rp_dev->readbase (see rp2040_flash_block_read for why the
+   * full-chip instance uses the cached alias instead of the nocache one).
    */
 
-  memcpy(buffer, FLASH_START_READ + offset, length);
+  memcpy(buffer,
+         (const uint8_t *)(rp_dev->readbase + rp_dev->offset) + offset,
+         length);
 
 #ifdef CONFIG_DEBUG_FS_INFO
   for (int j = 0; j < 16 && j < nbytes; ++j)
@@ -654,8 +692,6 @@ static int rp2040_flash_ioctl(struct mtd_dev_s *dev,
   rp2040_flash_dev_t *rp_dev = (rp2040_flash_dev_t *)dev;
   int                 ret    = OK;
 
-  UNUSED(rp_dev);
-
   switch (cmd)
     {
       case MTDIOC_GEOMETRY:
@@ -668,7 +704,7 @@ static int rp2040_flash_ioctl(struct mtd_dev_s *dev,
 
               geo->blocksize    = FLASH_SECTOR_SIZE;
               geo->erasesize    = FLASH_BLOCK_SIZE;
-              geo->neraseblocks = FLASH_BLOCK_COUNT;
+              geo->neraseblocks = rp_dev->nblocks;
             }
 
           break;
@@ -681,7 +717,7 @@ static int rp2040_flash_ioctl(struct mtd_dev_s *dev,
            * device.
            */
 
-          ret = rp2040_flash_erase(dev, 0, FLASH_BLOCK_COUNT);
+          ret = rp2040_flash_erase(dev, 0, rp_dev->nblocks);
 
           break;
         }
@@ -721,6 +757,15 @@ struct mtd_dev_s *rp2040_flash_mtd_initialize(void)
       errno = ENOMEM;
       return NULL;
     }
+
+  /* This legacy instance operates on the flash region past the loaded NuttX
+   * image (the smartfs window), addressed relative to
+   * rp2040_smart_flash_start.
+   */
+
+  my_dev.offset   = FLASH_START_OFFSET;
+  my_dev.nblocks  = FLASH_BLOCK_COUNT;
+  my_dev.readbase = XIP_NOCACHE_NOALLOC_BASE;
 
   rom_functions.connect_internal_flash = ROM_LOOKUP(ROM_FLASH_CONNECT);
   rom_functions.flash_exit_xip         = ROM_LOOKUP(ROM_FLASH_EXIT_XIP);
@@ -767,4 +812,55 @@ struct mtd_dev_s *rp2040_flash_mtd_initialize(void)
     }
 
   return &(my_dev.mtd_dev);
+}
+
+/****************************************************************************
+ * Name: rp2040_flash_mtd_initialize_full
+ *
+ * Description:
+ *   Bind an MTD driver that spans the whole flash chip (offset 0 ..
+ *   CONFIG_RP2040_FLASH_LENGTH), so the partition layer (txtable) can carve
+ *   /dev/bootloader, /dev/ap and the staging area across the full device.
+ *   Unlike rp2040_flash_mtd_initialize(), this window is NOT confined to the
+ *   region past the running NuttX image, so it can address the vector table,
+ *   boot2 and the bootloader partition itself.  Writing/erasing the region
+ *   that holds the currently executing code is the caller's responsibility
+ *   (see PER-167 D2: staged + SRAM-resident copy for bootloader
+ *   self-update).
+ *
+ ****************************************************************************/
+
+struct mtd_dev_s *rp2040_flash_mtd_initialize_full(void)
+{
+  if (initialized_full)
+    {
+      errno = EBUSY;
+      return NULL;
+    }
+
+  /* Make sure the ROM helpers are resolved even if the legacy smartfs
+   * instance was never initialized.  ROM_LOOKUP is a pure table lookup, so
+   * running it again is harmless if rp2040_flash_mtd_initialize() already
+   * populated rom_functions.
+   */
+
+  rom_functions.connect_internal_flash = ROM_LOOKUP(ROM_FLASH_CONNECT);
+  rom_functions.flash_exit_xip         = ROM_LOOKUP(ROM_FLASH_EXIT_XIP);
+  rom_functions.flash_range_erase      = ROM_LOOKUP(ROM_FLASH_ERASE);
+  rom_functions.flash_range_program    = ROM_LOOKUP(ROM_FLASH_PROGRAM);
+  rom_functions.flash_flush_cache      = ROM_LOOKUP(ROM_FLASH_FLUSH_CACHE);
+
+  if (rom_functions.flash_enable_xip == NULL)
+    {
+      memcpy(my_dev.boot_2, (void *)XIP_BASE, BOOT_2_SIZE);
+      rom_functions.flash_enable_xip = (flash_enable_xip_f)my_dev.boot_2 + 1;
+    }
+
+  my_dev_full.offset   = 0;
+  my_dev_full.nblocks  = CONFIG_RP2040_FLASH_LENGTH / FLASH_BLOCK_SIZE;
+  my_dev_full.readbase = XIP_BASE;
+
+  initialized_full = true;
+
+  return &(my_dev_full.mtd_dev);
 }
