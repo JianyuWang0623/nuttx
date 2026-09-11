@@ -166,8 +166,7 @@ static int     rp2040_flash_ioctl      (struct mtd_dev_s *dev,
  * Public Data
  ****************************************************************************/
 
-extern const uint8_t rp2040_smart_flash_start[256];
-extern const uint8_t rp2040_smart_flash_end[0];
+/* Linker symbols now declared in rp2040_flash_mtd.h */
 
 /****************************************************************************
  * Private Data
@@ -740,8 +739,13 @@ struct mtd_dev_s *rp2040_flash_mtd_initialize(void)
   memcpy(my_dev.boot_2, (void *)XIP_BASE, BOOT_2_SIZE);
   rom_functions.flash_enable_xip = (flash_enable_xip_f)my_dev.boot_2 + 1;
 
-  /* Do we need to initialize the flash? */
+  /* Do we need to initialize the flash?
+   * Only erase the "magic" tag region when building with the flash
+   * filesystem.  For MTD-only builds (e.g. AP flash partition), the
+   * flash contents must be preserved.
+   */
 
+#ifdef CONFIG_RP2040_FLASH_FILE_SYSTEM
   if (memcmp(rp2040_smart_flash_start, "2040", 4) == 0)
     {
       uint8_t    buffer[FLASH_SECTOR_SIZE];
@@ -765,6 +769,7 @@ struct mtd_dev_s *rp2040_flash_mtd_initialize(void)
 
       leave_critical_section(flags);
     }
+#endif
 
   return &(my_dev.mtd_dev);
 }
