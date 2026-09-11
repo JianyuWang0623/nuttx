@@ -97,6 +97,11 @@ CHIP_CSRCS += rp2040_flash_mtd.c
 CHIP_ASRCS += rp2040_flash_initialize.S
 endif
 
+ifeq ($(CONFIG_RP2040_FLASH_MTD),y)
+CHIP_CSRCS += rp2040_flash_mtd.c
+CHIP_ASRCS += rp2040_flash_initialize.S
+endif
+
 ifeq ($(CONFIG_RP2040_FLASH_BOOT),y)
 ifneq ($(PICO_SDK_PATH),)
 include chip/boot2/Make.defs

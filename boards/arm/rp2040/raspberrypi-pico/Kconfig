@@ -5,4 +5,12 @@
 
 if ARCH_BOARD_RASPBERRYPI_PICO
 
+config RP2040_AP_IMAGE
+	bool "Build as AP image (SRAM-only, for bootloader loading)"
+	default n
+	---help---
+		Build the image as an AP (Application Processor) image that
+		will be loaded by the bootloader.  Uses the SRAM AP linker
+		script with ORIGIN at CONFIG_BOOT_RP2040BOOT_AP_BASE.
+
 endif

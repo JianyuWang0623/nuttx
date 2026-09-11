@@ -134,6 +134,15 @@
 #  include "rp2040_flash_mtd.h"
 #endif
 
+#ifdef CONFIG_RP2040_AP_FLASH_PART
+#  include "rp2040_flash_mtd.h"
+#  include <nuttx/drivers/drivers.h>
+#endif
+
+#if (defined(CONFIG_RP2040_BOOT_ELF) || defined(CONFIG_RP2040_AP_IMAGE)) && defined(CONFIG_CDCACM) && defined(CONFIG_USBDEV)
+#  include <nuttx/usb/cdcacm.h>
+#endif
+
 #ifdef CONFIG_WS2812_HAS_WHITE
 #define HAS_WHITE true
 #else /* CONFIG_WS2812_HAS_WHITE */
@@ -154,6 +163,14 @@ int rp2040_common_bringup(void)
 
 #ifdef CONFIG_RP2040_FLASH_FILE_SYSTEM
   struct mtd_dev_s *mtd_dev;
+#endif
+
+#if (defined(CONFIG_RP2040_BOOT_ELF) || defined(CONFIG_RP2040_AP_IMAGE)) && defined(CONFIG_CDCACM) && defined(CONFIG_USBDEV)
+  ret = cdcacm_initialize(0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: cdcacm_initialize failed: %d\n", ret);
+    }
 #endif
 
 #ifdef CONFIG_RP2040_I2C_DRIVER
@@ -797,5 +814,53 @@ int rp2040_common_bringup(void)
     }
 
 #endif
+
+#ifdef CONFIG_RP2040_AP_FLASH_PART
+  /* Register AP flash partition as MTD char device for bootloader */
+
+  {
+    struct mtd_dev_s *ap_mtd;
+    struct mtd_dev_s *ap_part;
+    char devpath[16];
+    int ap_ret;
+    int minor = CONFIG_RP2040_AP_FLASH_PART_MINOR;
+
+    ap_mtd = rp2040_flash_mtd_initialize();
+    if (ap_mtd == NULL)
+      {
+        syslog(LOG_ERR, "ERROR: AP flash_mtd_initialize failed\n");
+      }
+    else
+      {
+        /* Create sub-partition for AP image.
+         * mtd_partition() firstblock is in units of the MTD blocksize
+         * reported by rp2040_flash_mtd (FLASH_SECTOR_SIZE = 256 B),
+         * and is relative to the MTD start (FLASH_START_OFFSET).
+         */
+
+        ap_part = mtd_partition(ap_mtd,
+                    (CONFIG_RP2040_AP_FLASH_PART_OFFSET -
+                     (rp2040_smart_flash_start -
+                      (FAR const uint8_t *)RP2040_XIP_BASE)) / 256,
+                    CONFIG_RP2040_AP_FLASH_PART_SIZE / 256);
+        if (ap_part == NULL)
+          {
+            syslog(LOG_ERR, "ERROR: mtd_partition for AP failed\n");
+          }
+        else
+          {
+            snprintf(devpath, sizeof(devpath), "/dev/ap%d", minor);
+            ap_ret = register_mtddriver(devpath, ap_part, 0755, NULL);
+            if (ap_ret < 0)
+              {
+                syslog(LOG_ERR,
+                       "ERROR: register_mtddriver(%s) failed: %d\n",
+                       devpath, ap_ret);
+              }
+          }
+      }
+  }
+#endif
+
   return ret;
 }

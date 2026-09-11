@@ -527,16 +527,17 @@ config RP2040_WS2812_PWR_GPIO
 endif # RP2040_BOARD_HAS_WS2812
 
 #####################################################################
-#  FLASH File System Configuration
+#  Flash Configuration
 #####################################################################
-
-if RP2040_FLASH_FILE_SYSTEM
 
 config RP2040_FLASH_LENGTH
 	int "Size of flash memory in bytes."
 	default 2097152
 	---help---
 		This is the overall amount of flash memory on the board.
+		Used by both the flash filesystem and the AP flash partition.
+
+if RP2040_FLASH_FILE_SYSTEM
 
 endif # RP2040_FLASH_FILE_SYSTEM
 
@@ -617,3 +618,17 @@ config RP2040_W5500_INT_GPIO
 		RP2040 pin number that connects to W5500 Interrupt
 
 endif # NET_W5500
+
+#####################################################################
+#  ELF Boot Support
+#####################################################################
+
+config RP2040_BOOT_ELF
+	bool "RP2040 ELF boot support"
+	default n
+	depends on ARCH_CHIP_RP2040
+	---help---
+		Enable support for jumping to an ELF image loaded in SRAM.
+		This provides rp2040_boot_jump() which disables interrupts,
+		resets USBCTRL, sets MSP, and jumps to the given reset
+		handler.

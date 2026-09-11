@@ -33,6 +33,10 @@ ifeq ($(CONFIG_BOARDCTL_BOOT_IMAGE),y)
 CSRCS += rp2040_boot_image.c
 endif
 
+ifeq ($(CONFIG_RP2040_BOOT_ELF),y)
+CSRCS += rp2040_boot_elf.c
+endif
+
 ifeq ($(CONFIG_SPI),y)
 CSRCS += rp2040_spi.c
 endif

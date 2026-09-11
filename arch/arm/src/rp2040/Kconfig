@@ -884,6 +884,18 @@ config RP2040_BOARD_HAS_WS2812
 		by ws2812.
 
 #####################################################################
+#  Flash MTD Configuration
+#####################################################################
+
+config RP2040_FLASH_MTD
+	bool "RP2040 flash MTD driver"
+	default n
+	select MTD
+	---help---
+		Enable the RP2040 flash MTD driver.  This provides raw
+		access to the on-chip QSPI flash as an MTD device.
+
+#####################################################################
 #  Flash File System Configuration
 #####################################################################
 
@@ -908,3 +920,40 @@ config RP2040_FLASH_MOUNT_POINT
 		mounting of the filesystem.
 
 endif # RP2040_FLASH_FILE_SYSTEM
+
+config RP2040_AP_FLASH_PART
+	bool "AP flash partition for bootloader ELF loading"
+	default n
+	select MTD
+	---help---
+		Create a raw flash partition for the AP (Application Processor)
+		ELF image.  The partition is exposed as an MTD char device
+		(/dev/apN) for the bootloader to read the AP ELF from flash.
+		No filesystem is used — the ELF is written directly to the
+		raw partition via picotool.
+
+if RP2040_AP_FLASH_PART
+
+config RP2040_AP_FLASH_PART_MINOR
+	int "AP flash partition minor number"
+	default 0
+	---help---
+		Minor number for the /dev/apN device.  Default: 0
+
+config RP2040_AP_FLASH_PART_OFFSET
+	hex "AP flash partition offset from flash start"
+	default 0x40000
+	---help---
+		Offset in bytes from the start of flash (0x10000000) where
+		the AP image partition begins.  Must be past the bootloader
+		and firmware.  Default: 0x40000 (256KB)
+
+config RP2040_AP_FLASH_PART_SIZE
+	hex "AP flash partition size"
+	default 0x1C0000
+	---help---
+		Size of the AP flash partition in bytes.  Default: 0x1C0000
+		(1792KB).  Combined with the default offset, this uses flash
+		up to 0x200000 (2MB boundary).
+
+endif # RP2040_AP_FLASH_PART

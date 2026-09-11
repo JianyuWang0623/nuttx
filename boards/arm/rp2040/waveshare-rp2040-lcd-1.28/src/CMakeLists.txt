@@ -33,6 +33,12 @@ if(CONFIG_RP2040_FLASH_BOOT)
     GLOBAL
     PROPERTY LD_SCRIPT
              "${NUTTX_BOARD_DIR}/scripts/waveshare-rp2040-lcd-1-28-flash.ld")
+elseif(CONFIG_RP2040_AP_IMAGE)
+  set_property(
+    GLOBAL
+    PROPERTY LD_SCRIPT
+             "${NUTTX_BOARD_DIR}/scripts/waveshare-rp2040-lcd-1-28-sram-ap.ld")
+  target_link_options(board PRIVATE -z max-page-size=0x100)
 else()
   set_property(
     GLOBAL

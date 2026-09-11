@@ -42,6 +42,11 @@ if(CONFIG_RP2040_FLASH_BOOT)
   set_property(
     GLOBAL PROPERTY LD_SCRIPT
                     "${NUTTX_BOARD_DIR}/scripts/raspberrypi-pico-flash.ld")
+elseif(CONFIG_RP2040_AP_IMAGE)
+  set_property(
+    GLOBAL PROPERTY LD_SCRIPT
+                    "${NUTTX_BOARD_DIR}/scripts/raspberrypi-pico-sram-ap.ld")
+  target_link_options(board PRIVATE -z max-page-size=0x100)
 else()
   set_property(
     GLOBAL PROPERTY LD_SCRIPT
