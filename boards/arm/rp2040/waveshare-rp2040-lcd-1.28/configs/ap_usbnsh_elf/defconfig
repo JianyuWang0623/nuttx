@@ -1,0 +1,4 @@
+#include "../usbnsh/defconfig"
+# CONFIG_RP2040_FLASH_BOOT is not set
+# CONFIG_RP2040_UF2_BINARY is not set
+CONFIG_RP2040_IMAGE_AP_ELF=y

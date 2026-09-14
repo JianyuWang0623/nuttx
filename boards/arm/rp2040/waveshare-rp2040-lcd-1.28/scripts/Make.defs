@@ -33,11 +33,22 @@ else ifeq ($(CONFIG_RP2040_IMAGE_AP),y)
 else
   LDSCRIPT = waveshare-rp2040-lcd-1-28-flash.ld
 endif
+else ifeq ($(CONFIG_RP2040_IMAGE_AP_ELF),y)
+  LDSCRIPT = waveshare-rp2040-lcd-1-28-ap-elf.ld
 else
   LDSCRIPT = waveshare-rp2040-lcd-1-28-sram.ld
 endif
 
 ARCHSCRIPT += $(BOARD_DIR)$(DELIM)scripts$(DELIM)$(LDSCRIPT)
+
+# The AP ELF image is loaded to its link address (p_paddr) by the bootloader's
+# elfboot chain-loader.  Keep the loadable segment aligned to 4 KiB (not the
+# default 64 KiB max-page-size) so the segment's p_paddr stays at the AP SRAM
+# origin (0x20008000) instead of being rounded down into the bootloader's
+# reserved region.
+ifeq ($(CONFIG_RP2040_IMAGE_AP_ELF),y)
+  EXTRALINKCMDS += -z max-page-size=0x1000 -z common-page-size=0x1000
+endif
 
 CFLAGS := $(ARCHCFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
 CXXFLAGS := $(ARCHCXXFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHXXINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)

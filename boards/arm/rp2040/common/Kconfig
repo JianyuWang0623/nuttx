@@ -37,6 +37,21 @@ config RP2040_IMAGE_AP
 		by the ROM, so it is not directly flashable at offset 0.  Only select
 		this in a dedicated ap_* defconfig.
 
+config RP2040_IMAGE_AP_ELF
+	bool "Build an AP ELF image (SRAM execution, loaded by elfboot)"
+	default n
+	depends on !RP2040_FLASH_BOOT
+	---help---
+		Link the image as a fully linked, fixed-address ET_EXEC that executes
+		entirely from SRAM (VMA == LMA), above the first-stage bootloader's
+		SRAM footprint.  The ELF file is stored in the "ap" partition and
+		loaded by the bootloader through board_boot_image() using libelf with
+		CONFIG_LIBC_ELF_LOADTO_LMA=y, which reads each segment straight to its
+		link address (no relocation).  Because it is an SRAM build,
+		RP2040_FLASH_BOOT must be n so __start() does not copy .data from a
+		non-existent flash LMA.  Only select this in a dedicated ap_*_elf
+		defconfig.
+
 config RP2040_FLASH_CHIP
 	string "Second stage boot loader"
 	default "w25q080"
