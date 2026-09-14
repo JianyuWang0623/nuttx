@@ -14,6 +14,29 @@ config RP2040_FLASH_BOOT
 		If y, the built binary can be used for flash boot.
 		If not, the binary is for SRAM boot.
 
+config RP2040_IMAGE_BOOTLOADER
+	bool "Build a first-stage bootloader image (bootloader partition)"
+	default n
+	depends on RP2040_FLASH_BOOT
+	---help---
+		Link the image into the first "bootloader" partition (first 512 KiB
+		of flash) instead of the whole chip, and enable the chain-load path
+		that boots the AP image from the "ap" partition.  Only select this in
+		a dedicated bootloader defconfig; ordinary defconfigs must stay linked
+		at flash offset 0 for the whole chip so they remain directly flashable
+		without this bootloader.
+
+config RP2040_IMAGE_AP
+	bool "Build an AP image (ap partition, XIP at 0x10080000)"
+	default n
+	depends on RP2040_FLASH_BOOT
+	---help---
+		Link the image to execute in place from the "ap" partition at flash
+		offset 0x80000 (0x10080000) with no boot2 stage.  Such an image is
+		started by the first-stage bootloader (RP2040_IMAGE_BOOTLOADER), not
+		by the ROM, so it is not directly flashable at offset 0.  Only select
+		this in a dedicated ap_* defconfig.
+
 config RP2040_FLASH_CHIP
 	string "Second stage boot loader"
 	default "w25q080"

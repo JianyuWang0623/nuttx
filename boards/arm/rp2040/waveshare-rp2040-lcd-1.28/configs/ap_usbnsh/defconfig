@@ -1,0 +1,2 @@
+#include "../usbnsh/defconfig"
+CONFIG_RP2040_IMAGE_AP=y

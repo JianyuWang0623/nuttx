@@ -355,6 +355,59 @@ static const struct file_operations g_w2probe_ops =
 };
 #endif /* CONFIG_MTD */
 
+#ifdef CONFIG_RP2040_IMAGE_BOOTLOADER
+/****************************************************************************
+ * Name: rp2040_boot_ap
+ *
+ * Description:
+ *   Chain-load the AP image from the "ap" partition via board_boot_image().
+ *   This does not return on success; it only returns if the AP image is
+ *   missing or invalid, leaving the bootloader resident in fastboot.
+ *
+ ****************************************************************************/
+
+static void rp2040_boot_ap(void)
+{
+  int ret;
+
+  /* Chain-load the AP image from the "ap" partition.  board_boot_image()
+   * loads it (an SRAM-linked ET_EXEC via libelf when CONFIG_LIBC_ELF is
+   * configured, otherwise a raw in-place image) and jumps to it; it only
+   * returns if the AP image is missing or invalid, in which case we stay
+   * resident in fastboot so the device is still flashable.
+   */
+
+  ret = board_boot_image("/dev/ap", 0);
+  syslog(LOG_ERR, "BOOT-AP: no valid AP image (%d), staying in fastboot\n",
+         ret);
+}
+
+/* Manual trigger to chain-load the AP image (bring-up validation): "cat
+ * /dev/bootap" jumps to the AP partition.  The production boot flow calls
+ * rp2040_boot_ap() automatically unless the reset cause requests staying in
+ * fastboot.
+ */
+
+static ssize_t rp2040_bootap_read(FAR struct file *filep,
+                                  FAR char *buffer, size_t buflen)
+{
+  if (filep->f_pos != 0)
+    {
+      return 0;
+    }
+
+  rp2040_boot_ap();
+
+  filep->f_pos = buflen;
+  return snprintf(buffer, buflen, "BOOT-AP: no valid AP image, see dmesg\n");
+}
+
+static const struct file_operations g_bootap_ops =
+{
+  .read = rp2040_bootap_read,
+};
+#endif /* CONFIG_RP2040_IMAGE_BOOTLOADER */
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -425,6 +478,15 @@ int rp2040_bringup(void)
                "%02x %02x %02x %02x %02x %02x %02x %02x\n",
                p1[0], p1[1], p1[2], p1[3], p1[4], p1[5], p1[6], p1[7]);
 
+#if defined(CONFIG_TXTABLE_PARTITION) && defined(CONFIG_RP2040_IMAGE_BOOTLOADER)
+        /* In the first-stage bootloader, parse the txtable at boot so the
+         * named partitions (/dev/bootloader, /dev/ap, ...) exist for
+         * "fastboot flash <name>" before anything jumps to the AP.
+         */
+
+        rp2040_txtable_setup(flash_full);
+#endif
+
         /* Manual, USB-re-enumerating path to write the default txtable on a
          * blank flash (erase+program stops XIP).
          */
@@ -448,6 +510,16 @@ int rp2040_bringup(void)
   }
 #endif
 
+#ifdef CONFIG_RP2040_IMAGE_BOOTLOADER
+  {
+    int ret2 = register_driver("/dev/bootap", &g_bootap_ops, 0444, NULL);
+
+    syslog(LOG_INFO,
+           "BOOT-AP: /dev/bootap register ret=%d "
+           "(cat to chain-load the AP image)\n", ret2);
+  }
+#endif
+
 #ifdef CONFIG_BOARDCTL_RESET_CAUSE
   /* W1 check: read (and clear) the persisted reset cause so we can confirm
    * on the console that board_reset(ENTER_BOOTLOADER) -> soft reset ->
@@ -465,6 +537,23 @@ int rp2040_bringup(void)
     syslog(LOG_INFO,
            "RESET-CAUSE: cause=%d flag=%d (flag==3 is ENTER_BOOTLOADER)\n",
            (int)rc.cause, (int)rc.flag);
+
+#ifdef CONFIG_RP2040_IMAGE_BOOTLOADER
+    /* First-stage boot flow: unless this boot explicitly requested staying
+     * resident in fastboot (ENTER_BOOTLOADER), chain-load the AP image.  If
+     * the AP partition is blank/invalid, rp2040_boot_ap() returns and we
+     * fall through to fastboot so the device can still be flashed.
+     */
+
+    if (rc.flag != BOARDIOC_SOFTRESETCAUSE_ENTER_BOOTLOADER)
+      {
+        rp2040_boot_ap();
+      }
+    else
+      {
+        syslog(LOG_INFO, "BOOT-AP: staying in fastboot (reset cause)\n");
+      }
+#endif
   }
 #endif
 

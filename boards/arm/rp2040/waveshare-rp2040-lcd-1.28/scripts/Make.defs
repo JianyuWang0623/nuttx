@@ -26,7 +26,13 @@ include $(TOPDIR)/tools/rp2040/Config.mk
 include $(TOPDIR)/arch/arm/src/armv6-m/Toolchain.defs
 
 ifeq ($(CONFIG_RP2040_FLASH_BOOT),y)
+ifeq ($(CONFIG_RP2040_IMAGE_BOOTLOADER),y)
+  LDSCRIPT = waveshare-rp2040-lcd-1-28-bootloader.ld
+else ifeq ($(CONFIG_RP2040_IMAGE_AP),y)
+  LDSCRIPT = waveshare-rp2040-lcd-1-28-ap.ld
+else
   LDSCRIPT = waveshare-rp2040-lcd-1-28-flash.ld
+endif
 else
   LDSCRIPT = waveshare-rp2040-lcd-1-28-sram.ld
 endif
