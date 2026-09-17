@@ -13,4 +13,16 @@ config RP2040_AP_IMAGE
 		will be loaded by the bootloader.  Uses the SRAM AP linker
 		script with ORIGIN at CONFIG_BOOT_RP2040BOOT_AP_BASE.
 
+config RP2040_AP_PIE
+	bool "Build AP image as position-independent executable (PIE)"
+	depends on RP2040_AP_IMAGE
+	default n
+	---help---
+		Link the AP image as an ET_DYN position-independent executable
+		using -fpie -pie --no-dynamic-linker, instead of a fixed-address
+		ET_EXEC image.  Requires CONFIG_LIBC_ELF_LOADTO_LMA on the
+		bootloader side to relocate the PIE image to its runtime SRAM
+		address via libelf_bind().  The AP image must NOT be stripped
+		(--strip-all) because libelf_bind() depends on .symtab.
+
 endif

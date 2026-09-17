@@ -20,6 +20,8 @@
  *
  ****************************************************************************/
 
+#include <nuttx/config.h>
+
 /* AP linker script: SRAM base at 0x20007800 (bootloader occupies 0x20000000-0x200077FF)
  * Available: 0x20042000 - 0x20007800 = 0x3A800 = 234KB
  *
@@ -30,17 +32,60 @@
  * region or .flash_section -- the AP does not own any flash.
  */
 
+#ifdef CONFIG_RP2040_AP_PIE
+MEMORY
+{
+  image (rwx) : ORIGIN = 0, LENGTH = 234K
+  sram  (rwx) : ORIGIN = 0x20007800, LENGTH = 234K
+}
+#  define AP_REGION > image AT> sram
+#  define AP_TEXT : text
+#  define AP_DATA : data
+#  define AP_DYNAMIC : data : dynamic
+#else
 MEMORY
 {
   sram (rwx) : ORIGIN = 0x20007800, LENGTH = 234K
 }
+#  define AP_REGION > sram
+#  define AP_TEXT
+#  define AP_DATA
+#  define AP_DYNAMIC
+#endif
 
 OUTPUT_ARCH(arm)
 EXTERN(_vectors)
 ENTRY(__start)
 
+#ifdef CONFIG_RP2040_AP_PIE
+PHDRS
+{
+  text    PT_LOAD FLAGS(5);
+  data    PT_LOAD FLAGS(6);
+  dynamic PT_DYNAMIC FLAGS(6);
+}
+#endif
+
 SECTIONS
 {
+#ifdef CONFIG_RP2040_AP_PIE
+    .dynsym : {
+        *(.dynsym)
+    } AP_REGION AP_TEXT
+
+    .dynstr : {
+        *(.dynstr)
+    } AP_REGION AP_TEXT
+
+    .hash : {
+        *(.hash)
+    } AP_REGION AP_TEXT
+
+    .rel.dyn : {
+        *(.rel.*)
+    } AP_REGION AP_TEXT
+#endif
+
     .text : {
         _stext = ABSOLUTE(.);
         *(.vectors)
@@ -55,7 +100,7 @@ SECTIONS
         *(.gcc_except_table)
         *(.gnu.linkonce.r.*)
         _etext = ABSOLUTE(.);
-    } > sram
+    } AP_REGION AP_TEXT
 
     /* Vector table must be 256-byte aligned for Cortex-M VTOR.
      * This catches CONFIG_BOOT_RP2040BOOT_AP_BASE being set to
@@ -69,27 +114,47 @@ SECTIONS
         KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
         KEEP(*(.init_array EXCLUDE_FILE(*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o) .ctors))
         _einit = ABSOLUTE(.);
-    } > sram
+    } AP_REGION AP_TEXT
 
     .ARM.extab : {
         *(.ARM.extab*)
-    } > sram
+    } AP_REGION AP_TEXT
 
     __exidx_start = ABSOLUTE(.);
     .ARM.exidx : {
         *(.ARM.exidx*)
-    } > sram
+    } AP_REGION AP_TEXT
     __exidx_end = ABSOLUTE(.);
+
+#ifdef CONFIG_RP2040_AP_PIE
+    /* Keep the data segment's VMA and LMA page offsets equal.  The two
+     * MEMORY regions have independent location counters, so AT> alone would
+     * otherwise omit this padding and produce a different data load bias.
+     */
+
+    . = ALIGN(0x100);
+    .lma_align : {
+        . = ALIGN(0x100);
+    } > sram
+#endif
 
     .data : {
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.gnu.linkonce.d.*)
         *(.ram_code.*)
+        *(.got.plt)
+        *(.ram_vectors)
         CONSTRUCTORS
         . = ALIGN(4);
         _edata = ABSOLUTE(.);
-    } > sram
+    } AP_REGION AP_DATA
+
+#ifdef CONFIG_RP2040_AP_PIE
+    .dynamic : {
+        *(.dynamic)
+    } AP_REGION AP_DYNAMIC
+#endif
 
     .bss : {
         _sbss = ABSOLUTE(.);
@@ -98,7 +163,7 @@ SECTIONS
         *(COMMON)
         . = ALIGN(4);
         _ebss = ABSOLUTE(.);
-    } > sram
+    } AP_REGION AP_DATA
 
     /* Stabs debugging sections. */
     .stab 0 : { *(.stab) }
