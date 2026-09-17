@@ -502,7 +502,7 @@ int up_relocate(const Elf32_Rel *rel, const Elf32_Sym *sym, uintptr_t addr,
     case R_ARM_RELATIVE:
     case R_ARM_JUMP_SLOT:
       {
-        *(uint32_t *)addr = (uint32_t)sym->st_value;
+        *(uint32_t *)addr += sym == NULL ? 0 : (uint32_t)sym->st_value;
       }
       break;
 

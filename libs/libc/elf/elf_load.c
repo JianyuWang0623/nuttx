@@ -664,6 +664,47 @@ int libelf_load(FAR struct mod_loadinfo_s *loadinfo)
                             loadinfo->segpad;
     }
 
+#else
+  /* ET_DYN normally gets its allocation above.  With LOADTO_LMA the
+   * program headers instead provide the destination addresses.
+   */
+
+  if (loadinfo->ehdr.e_type == ET_DYN)
+    {
+      int i;
+
+      for (i = 0; i < loadinfo->ehdr.e_phnum; i++)
+        {
+          FAR Elf_Phdr *phdr = &loadinfo->phdr[i];
+
+          if (phdr->p_type == PT_LOAD && phdr->p_memsz > 0)
+            {
+              if ((phdr->p_flags & PF_X) != 0 && loadinfo->textalloc == 0)
+                {
+                  loadinfo->textalloc = phdr->p_paddr;
+                }
+              else if ((phdr->p_flags & PF_W) != 0 &&
+                       loadinfo->datastart == 0)
+                {
+                  loadinfo->datastart = phdr->p_paddr;
+                }
+            }
+        }
+
+      if (loadinfo->textalloc == 0)
+        {
+          berr("ERROR: ET_DYN has no executable PT_LOAD segment\n");
+          ret = -ENOEXEC;
+          goto errout_with_buffers;
+        }
+
+      if (loadinfo->datasize > 0 && loadinfo->datastart == 0)
+        {
+          berr("ERROR: ET_DYN has no writable PT_LOAD segment\n");
+          ret = -ENOEXEC;
+          goto errout_with_buffers;
+        }
+    }
 #endif /* CONFIG_LIBC_ELF_LOADTO_LMA */
 
   /* Load ELF section data into memory */

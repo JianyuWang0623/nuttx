@@ -190,6 +190,7 @@ static int libelf_relocate(FAR struct module_s *modp,
   FAR dq_entry_t   *e;
   dq_queue_t        q;
   uintptr_t         addr;
+  bool              global;
   int               symidx;
   int               ret = OK;
   int               i;
@@ -208,6 +209,7 @@ static int libelf_relocate(FAR struct module_s *modp,
     }
 
   dq_init(&q);
+  global = loadinfo->ehdr.e_type == ET_DYN && relsec->sh_info == 0;
 
   /* Examine each relocation in the section.  'relsec' is the section
    * containing the relations.  'dstsec' is the section containing the data
@@ -238,6 +240,17 @@ static int libelf_relocate(FAR struct module_s *modp,
        */
 
       symidx = ELF_R_SYM(rel->r_info);
+
+#if defined(CONFIG_LIBC_ELF_LOADTO_LMA) && defined(__arm__)
+      if (global &&
+          (ELF_R_TYPE(rel->r_info) == R_ARM_RELATIVE ||
+           ELF_R_TYPE(rel->r_info) == R_ARM_JUMP_SLOT))
+        {
+          addr = libelf_addr(loadinfo, rel->r_offset);
+          *(FAR uint32_t *)addr += libelf_addr(loadinfo, 0);
+          continue;
+        }
+#endif
 
       /* First try the cache */
 
@@ -336,7 +349,11 @@ static int libelf_relocate(FAR struct module_s *modp,
 
       /* Calculate the relocation address. */
 
-      if (loadinfo->gotindex >= 0)
+      if (global)
+        {
+          addr = libelf_addr(loadinfo, rel->r_offset);
+        }
+      else if (loadinfo->gotindex >= 0)
         {
           if (sym->st_shndx == SHN_UNDEF)
             {
@@ -442,6 +459,7 @@ static int libelf_relocateadd(FAR struct module_s *modp,
   FAR dq_entry_t   *e;
   dq_queue_t        q;
   uintptr_t         addr;
+  bool              global;
   int               symidx;
   int               ret = OK;
   int               i;
@@ -460,6 +478,7 @@ static int libelf_relocateadd(FAR struct module_s *modp,
     }
 
   dq_init(&q);
+  global = loadinfo->ehdr.e_type == ET_DYN && relsec->sh_info == 0;
 
   /* Examine each relocation in the section.  'relsec' is the section
    * containing the relations.  'dstsec' is the section containing the data
@@ -588,8 +607,12 @@ static int libelf_relocateadd(FAR struct module_s *modp,
 
       /* Calculate the relocation address. */
 
-      if (rela->r_offset < 0 ||
-          rela->r_offset > dstsec->sh_size)
+      if (global)
+        {
+          addr = libelf_addr(loadinfo, rela->r_offset);
+        }
+      else if (rela->r_offset < 0 ||
+               rela->r_offset > dstsec->sh_size)
         {
           berr("ERROR: Section %d reloc %d: "
                "Relocation address out of range, "
@@ -599,8 +622,10 @@ static int libelf_relocateadd(FAR struct module_s *modp,
           ret = -EINVAL;
           break;
         }
-
-      addr = dstsec->sh_addr + rela->r_offset;
+      else
+        {
+          addr = dstsec->sh_addr + rela->r_offset;
+        }
 
       /* Now perform the architecture-specific relocation */
 
@@ -955,7 +980,16 @@ int libelf_bind(FAR struct module_s *modp,
           switch (loadinfo->shdr[i].sh_type)
             {
               case SHT_DYNAMIC:
+#ifdef CONFIG_LIBC_ELF_LOADTO_LMA
+                /* LOADTO_LMA PIEs are relocated by their sh_info=0
+                 * SHT_REL/SHT_RELA sections below.  Do not process the same
+                 * relocation table a second time through DT_REL/DT_RELA.
+                 */
+
+                ret = OK;
+#else
                 ret = libelf_relocatedyn(modp, loadinfo, i);
+#endif
                 break;
               case SHT_DYNSYM:
                 loadinfo->dsymtabidx = i;
@@ -977,6 +1011,24 @@ int libelf_bind(FAR struct module_s *modp,
                                                 loadinfo->shdr[i].sh_addr);
                 loadinfo->nprei = loadinfo->shdr[i].sh_size /
                                   sizeof(uintptr_t);
+                break;
+
+              case SHT_REL:
+                if (infosec == 0)
+                  {
+                    ret = libelf_relocate(modp, loadinfo, i, exports,
+                                          nexports);
+                  }
+
+                break;
+
+              case SHT_RELA:
+                if (infosec == 0)
+                  {
+                    ret = libelf_relocateadd(modp, loadinfo, i, exports,
+                                             nexports);
+                  }
+
                 break;
             }
 
