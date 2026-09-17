@@ -225,6 +225,21 @@ static void esp32s3_txint(struct uart_dev_s *dev, bool enable)
     {
       modifyreg32(USB_SERIAL_JTAG_INT_ENA_REG, 0,
                   USB_SERIAL_JTAG_SERIAL_IN_EMPTY_INT_ENA);
+
+      /* SERIAL_IN_EMPTY is a transfer-completion event: it only fires
+       * after the host picks up a previously queued packet.  If nothing
+       * is currently in flight (e.g. the very first byte written after
+       * the xmit buffer was empty), enabling the interrupt alone will
+       * never generate that edge, and uart_xmitchars() would never run
+       * again -- leaving any thread blocked on dev->xmitsem stuck
+       * forever.  Kick the transfer here if the hardware is already
+       * able to accept data, so there is no missing self-start path.
+       */
+
+      if (esp32s3_txready(dev))
+        {
+          uart_xmitchars(dev);
+        }
     }
   else
     {
