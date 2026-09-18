@@ -33,21 +33,29 @@
  */
 
 #ifdef CONFIG_RP2040_AP_PIE
+/* PIE layout: VMA starts at 0 (position-independent), LMA starts at
+ * sram_base.  Every output section uses explicit AT(ADDR(.section) + sram_base)
+ * so the VMA-to-LMA delta is exactly sram_base for every section -- no
+ * drift between two independent MEMORY-region location counters (which
+ * is what a plain "AT> sram" second-region approach would be prone to).
+ */
+sram_base = 0x20007800;
 MEMORY
 {
   image (rwx) : ORIGIN = 0, LENGTH = 234K
-  sram  (rwx) : ORIGIN = 0x20007800, LENGTH = 234K
 }
-#  define AP_REGION > image AT> sram
-#  define AP_TEXT : text
-#  define AP_DATA : data
-#  define AP_DYNAMIC : data : dynamic
+#  define AP_REGION      > image
+#  define AP_AT(name)    AT(ADDR(name) + sram_base)
+#  define AP_TEXT        : text
+#  define AP_DATA        : data
+#  define AP_DYNAMIC     : data : dynamic
 #else
 MEMORY
 {
   sram (rwx) : ORIGIN = 0x20007800, LENGTH = 234K
 }
-#  define AP_REGION > sram
+#  define AP_REGION      > sram
+#  define AP_AT(name)
 #  define AP_TEXT
 #  define AP_DATA
 #  define AP_DYNAMIC
@@ -69,24 +77,24 @@ PHDRS
 SECTIONS
 {
 #ifdef CONFIG_RP2040_AP_PIE
-    .dynsym : {
+    .dynsym : AP_AT(.dynsym) {
         *(.dynsym)
     } AP_REGION AP_TEXT
 
-    .dynstr : {
+    .dynstr : AP_AT(.dynstr) {
         *(.dynstr)
     } AP_REGION AP_TEXT
 
-    .hash : {
+    .hash : AP_AT(.hash) {
         *(.hash)
     } AP_REGION AP_TEXT
 
-    .rel.dyn : {
+    .rel.dyn : AP_AT(.rel.dyn) {
         *(.rel.*)
     } AP_REGION AP_TEXT
 #endif
 
-    .text : {
+    .text : AP_AT(.text) {
         _stext = ABSOLUTE(.);
         *(.vectors)
         *(.text .text.*)
@@ -109,36 +117,26 @@ SECTIONS
 
     ASSERT((_vectors & 0xff) == 0, "vector table must be 256-byte aligned (check AP_BASE)")
 
-    .init_section : {
+    .init_section : AP_AT(.init_section) {
         _sinit = ABSOLUTE(.);
         KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
         KEEP(*(.init_array EXCLUDE_FILE(*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o) .ctors))
         _einit = ABSOLUTE(.);
     } AP_REGION AP_TEXT
 
-    .ARM.extab : {
+    .ARM.extab : AP_AT(.ARM.extab) {
         *(.ARM.extab*)
     } AP_REGION AP_TEXT
 
     __exidx_start = ABSOLUTE(.);
-    .ARM.exidx : {
+    .ARM.exidx : AP_AT(.ARM.exidx) {
         *(.ARM.exidx*)
     } AP_REGION AP_TEXT
     __exidx_end = ABSOLUTE(.);
 
-#ifdef CONFIG_RP2040_AP_PIE
-    /* Keep the data segment's VMA and LMA page offsets equal.  The two
-     * MEMORY regions have independent location counters, so AT> alone would
-     * otherwise omit this padding and produce a different data load bias.
-     */
-
     . = ALIGN(0x100);
-    .lma_align : {
-        . = ALIGN(0x100);
-    } > sram
-#endif
 
-    .data : {
+    .data : AP_AT(.data) {
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.gnu.linkonce.d.*)
@@ -151,12 +149,12 @@ SECTIONS
     } AP_REGION AP_DATA
 
 #ifdef CONFIG_RP2040_AP_PIE
-    .dynamic : {
+    .dynamic : AP_AT(.dynamic) {
         *(.dynamic)
     } AP_REGION AP_DYNAMIC
 #endif
 
-    .bss : {
+    .bss : AP_AT(.bss) {
         _sbss = ABSOLUTE(.);
         *(.bss .bss.*)
         *(.gnu.linkonce.b.*)
