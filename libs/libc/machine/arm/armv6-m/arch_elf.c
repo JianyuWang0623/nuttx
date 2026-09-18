@@ -500,9 +500,31 @@ int up_relocate(const Elf32_Rel *rel, const Elf32_Sym *sym, uintptr_t addr,
       break;
 
     case R_ARM_RELATIVE:
+      {
+        /* R_ARM_RELATIVE: B + A (base address + addend).
+         * The addend is the value already at *addr.
+         */
+
+        *(uint32_t *)addr += sym == NULL ? 0 : (uint32_t)sym->st_value;
+      }
+      break;
+
     case R_ARM_JUMP_SLOT:
       {
-        *(uint32_t *)addr += sym == NULL ? 0 : (uint32_t)sym->st_value;
+        /* R_ARM_JUMP_SLOT: S (resolved symbol address).
+         * This relocation type is for PLT entries and requires the
+         * resolved symbol address, not a base-relative calculation.
+         * In the current PoC configuration with --no-dynamic-linker,
+         * PLT should be empty, but we handle it correctly anyway.
+         */
+
+        if (sym == NULL)
+          {
+            berr("ERROR: R_ARM_JUMP_SLOT requires a symbol\n");
+            return -EINVAL;
+          }
+
+        *(uint32_t *)addr = (uint32_t)sym->st_value;
       }
       break;
 
