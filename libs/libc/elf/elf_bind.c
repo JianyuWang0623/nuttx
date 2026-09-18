@@ -242,11 +242,6 @@ static int libelf_relocate(FAR struct module_s *modp,
       symidx = ELF_R_SYM(rel->r_info);
 
 #if defined(CONFIG_LIBC_ELF_LOADTO_LMA) && defined(__arm__)
-      /* R_ARM_JUMP_SLOT requires the resolved symbol address (S), not the
-       * load bias, so it cannot take this addend-only fast path.  Let it
-       * fall through to the normal symbol lookup below.
-       */
-
       if (global && ELF_R_TYPE(rel->r_info) == R_ARM_RELATIVE)
         {
           addr = libelf_addr(loadinfo, rel->r_offset);
@@ -355,6 +350,27 @@ static int libelf_relocate(FAR struct module_s *modp,
       if (global)
         {
           addr = libelf_addr(loadinfo, rel->r_offset);
+
+          /* Validate that the target address falls within a loaded segment.
+           * This prevents malicious ELF files from writing arbitrary memory.
+           */
+
+          if (addr < loadinfo->textalloc ||
+              addr + sizeof(uint32_t) >
+              loadinfo->textalloc + loadinfo->textsize)
+            {
+              if (loadinfo->datastart == 0 ||
+                  addr < loadinfo->datastart ||
+                  addr + sizeof(uint32_t) >
+                  loadinfo->datastart + loadinfo->datasize)
+                {
+                  berr("ERROR: Section %d reloc %d: Relocation target "
+                       "0x%" PRIxPTR " outside loaded segments\n",
+                       relidx, i, addr);
+                  ret = -EINVAL;
+                  break;
+                }
+            }
         }
       else if (loadinfo->gotindex >= 0)
         {
@@ -1017,7 +1033,17 @@ int libelf_bind(FAR struct module_s *modp,
                 break;
 
               case SHT_REL:
+#ifdef CONFIG_LIBC_ELF_LOADTO_LMA
+                /* With LOADTO_LMA, only process sh_info==0 global
+                 * relocations.  Without LOADTO_LMA,
+                 * libelf_relocatedyn() already processed them via
+                 * DT_REL, so skip here to avoid double relocation.
+                 */
+
                 if (infosec == 0)
+#else
+                if (infosec == 0 && loadinfo->ehdr.e_type != ET_DYN)
+#endif
                   {
                     ret = libelf_relocate(modp, loadinfo, i, exports,
                                           nexports);
@@ -1026,7 +1052,11 @@ int libelf_bind(FAR struct module_s *modp,
                 break;
 
               case SHT_RELA:
+#ifdef CONFIG_LIBC_ELF_LOADTO_LMA
                 if (infosec == 0)
+#else
+                if (infosec == 0 && loadinfo->ehdr.e_type != ET_DYN)
+#endif
                   {
                     ret = libelf_relocateadd(modp, loadinfo, i, exports,
                                              nexports);

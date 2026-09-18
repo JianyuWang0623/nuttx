@@ -121,7 +121,13 @@ int libelf_unload(FAR struct mod_loadinfo_s *loadinfo)
     }
   else
     {
+#ifdef CONFIG_LIBC_ELF_LOADTO_LMA
+      /* With LOADTO_LMA, textalloc and datastart come from PT_LOAD p_paddr
+       * (fixed SRAM addresses), not from lib_malloc(). Do not free them.
+       */
+#else
       lib_free((FAR void *)loadinfo->textalloc);
+#endif
     }
 
   /* Clear out all indications of the allocated address environment */
