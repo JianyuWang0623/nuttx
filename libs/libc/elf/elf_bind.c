@@ -242,9 +242,12 @@ static int libelf_relocate(FAR struct module_s *modp,
       symidx = ELF_R_SYM(rel->r_info);
 
 #if defined(CONFIG_LIBC_ELF_LOADTO_LMA) && defined(__arm__)
-      if (global &&
-          (ELF_R_TYPE(rel->r_info) == R_ARM_RELATIVE ||
-           ELF_R_TYPE(rel->r_info) == R_ARM_JUMP_SLOT))
+      /* R_ARM_JUMP_SLOT requires the resolved symbol address (S), not the
+       * load bias, so it cannot take this addend-only fast path.  Let it
+       * fall through to the normal symbol lookup below.
+       */
+
+      if (global && ELF_R_TYPE(rel->r_info) == R_ARM_RELATIVE)
         {
           addr = libelf_addr(loadinfo, rel->r_offset);
           *(FAR uint32_t *)addr += libelf_addr(loadinfo, 0);
