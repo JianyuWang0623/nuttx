@@ -100,10 +100,8 @@
 #define OV3660_REG_FORMAT_CTRL  0x501f
 #define OV3660_REG_FORMAT_CTRL00 0x4300
 
-/* Sensor native (full) resolution and 4:3 crop window, taken from the
- * OV3660 "4x3" ratio table (espressif/esp32-camera sensors/ov3660.c).
- * Only the sensor's binned output modes (<= 1024x768) are supported by
- * this driver; full-resolution readout is not implemented.
+/* Sensor native (full) resolution and 4:3 crop window, taken from
+ * espressif/esp32-camera ratio_table for 4:3 aspect ratio.
  */
 
 #define OV3660_NATIVE_WIDTH     2048
