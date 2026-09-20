@@ -137,6 +137,7 @@
 #ifdef CONFIG_RP2040_AP_FLASH_PART
 #  include "rp2040_flash_mtd.h"
 #  include <nuttx/drivers/drivers.h>
+#  include <nuttx/mtd/mtd.h>
 #endif
 
 #if (defined(CONFIG_RP2040_BOOT_ELF) || defined(CONFIG_RP2040_AP_IMAGE)) && defined(CONFIG_CDCACM) && defined(CONFIG_USBDEV)
@@ -850,13 +851,39 @@ int rp2040_common_bringup(void)
         else
           {
             snprintf(devpath, sizeof(devpath), "/dev/ap%d", minor);
-            ap_ret = register_mtddriver(devpath, ap_part, 0755, NULL);
-            if (ap_ret < 0)
-              {
-                syslog(LOG_ERR,
-                       "ERROR: register_mtddriver(%s) failed: %d\n",
-                       devpath, ap_ret);
-              }
+
+            /* The ELF bootloader reads the AP image with libelf, which uses
+             * lseek() to reach each program-segment offset.  A raw MTD
+             * character node (register_mtddriver) does not support arbitrary
+             * lseek, so libelf_load() fails with -ESPIPE.  Wrap the MTD
+             * partition as a block device via FTL, then expose it as a
+             * seekable character device via BCH.  The resulting /dev/apN
+             * supports lseek(SEEK_SET) to any offset.
+             */
+
+            {
+              char blkpath[20];
+
+              snprintf(blkpath, sizeof(blkpath), "/dev/apblk%d", minor);
+
+              ap_ret = ftl_initialize_by_path(blkpath, ap_part, 0);
+              if (ap_ret < 0)
+                {
+                  syslog(LOG_ERR,
+                         "ERROR: ftl_initialize_by_path(%s) failed: %d\n",
+                         blkpath, ap_ret);
+                }
+              else
+                {
+                  ap_ret = bchdev_register(blkpath, devpath, false);
+                  if (ap_ret < 0)
+                    {
+                      syslog(LOG_ERR,
+                             "ERROR: bchdev_register(%s->%s) failed: %d\n",
+                             blkpath, devpath, ap_ret);
+                    }
+                }
+            }
           }
       }
   }
