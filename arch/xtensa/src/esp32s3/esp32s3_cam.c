@@ -627,6 +627,13 @@ static int esp32s3_cam_set_buf(struct imgdata_s *data,
 
   if (addr != NULL && size > 0)
     {
+      if ((uintptr_t)addr % ESP32S3_CAM_DMA_ALIGN != 0)
+        {
+          snerr("ERROR: Buffer %p is not aligned to %d bytes\n",
+                addr, ESP32S3_CAM_DMA_ALIGN);
+          return -EINVAL;
+        }
+
       priv->fb = addr;
       priv->fb_size = size;
       priv->fb_allocated = false;
