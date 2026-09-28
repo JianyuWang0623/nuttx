@@ -134,6 +134,16 @@
 #  include "rp2040_flash_mtd.h"
 #endif
 
+#ifdef CONFIG_RP2040_AP_FLASH_PART
+#  include "rp2040_flash_mtd.h"
+#  include <nuttx/drivers/drivers.h>
+#  include <nuttx/mtd/mtd.h>
+#endif
+
+#if (defined(CONFIG_RP2040_BOOT_ELF) || defined(CONFIG_RP2040_AP_IMAGE)) && defined(CONFIG_CDCACM) && defined(CONFIG_USBDEV)
+#  include <nuttx/usb/cdcacm.h>
+#endif
+
 #ifdef CONFIG_WS2812_HAS_WHITE
 #define HAS_WHITE true
 #else /* CONFIG_WS2812_HAS_WHITE */
@@ -154,6 +164,16 @@ int rp2040_common_bringup(void)
 
 #ifdef CONFIG_RP2040_FLASH_FILE_SYSTEM
   struct mtd_dev_s *mtd_dev;
+#endif
+
+#if (defined(CONFIG_RP2040_BOOT_ELF) || defined(CONFIG_RP2040_AP_IMAGE)) && \
+    defined(CONFIG_CDCACM) && defined(CONFIG_USBDEV) && \
+    !defined(CONFIG_CDCACM_COMPOSITE) && !defined(CONFIG_NSH_USBCONSOLE)
+  ret = cdcacm_initialize(0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: cdcacm_initialize failed: %d\n", ret);
+    }
 #endif
 
 #ifdef CONFIG_RP2040_I2C_DRIVER
@@ -797,5 +817,79 @@ int rp2040_common_bringup(void)
     }
 
 #endif
+
+#ifdef CONFIG_RP2040_AP_FLASH_PART
+  /* Register AP flash partition as MTD char device for bootloader */
+
+  {
+    struct mtd_dev_s *ap_mtd;
+    struct mtd_dev_s *ap_part;
+    char devpath[16];
+    int ap_ret;
+    int minor = CONFIG_RP2040_AP_FLASH_PART_MINOR;
+
+    ap_mtd = rp2040_flash_mtd_initialize();
+    if (ap_mtd == NULL)
+      {
+        syslog(LOG_ERR, "ERROR: AP flash_mtd_initialize failed\n");
+      }
+    else
+      {
+        /* Create sub-partition for AP image.
+         * mtd_partition() firstblock is in units of the MTD blocksize
+         * reported by rp2040_flash_mtd (FLASH_SECTOR_SIZE = 256 B),
+         * and is relative to the MTD start (FLASH_START_OFFSET).
+         */
+
+        ap_part = mtd_partition(ap_mtd,
+                    (CONFIG_RP2040_AP_FLASH_PART_OFFSET -
+                     (rp2040_smart_flash_start -
+                      (FAR const uint8_t *)RP2040_XIP_BASE)) / 256,
+                    CONFIG_RP2040_AP_FLASH_PART_SIZE / 256);
+        if (ap_part == NULL)
+          {
+            syslog(LOG_ERR, "ERROR: mtd_partition for AP failed\n");
+          }
+        else
+          {
+            snprintf(devpath, sizeof(devpath), "/dev/ap%d", minor);
+
+            /* The ELF bootloader reads the AP image with libelf, which uses
+             * lseek() to reach each program-segment offset.  A raw MTD
+             * character node (register_mtddriver) does not support arbitrary
+             * lseek, so libelf_load() fails with -ESPIPE.  Wrap the MTD
+             * partition as a block device via FTL, then expose it as a
+             * seekable character device via BCH.  The resulting /dev/apN
+             * supports lseek(SEEK_SET) to any offset.
+             */
+
+            {
+              char blkpath[20];
+
+              snprintf(blkpath, sizeof(blkpath), "/dev/apblk%d", minor);
+
+              ap_ret = ftl_initialize_by_path(blkpath, ap_part, 0);
+              if (ap_ret < 0)
+                {
+                  syslog(LOG_ERR,
+                         "ERROR: ftl_initialize_by_path(%s) failed: %d\n",
+                         blkpath, ap_ret);
+                }
+              else
+                {
+                  ap_ret = bchdev_register(blkpath, devpath, false);
+                  if (ap_ret < 0)
+                    {
+                      syslog(LOG_ERR,
+                             "ERROR: bchdev_register(%s->%s) failed: %d\n",
+                             blkpath, devpath, ap_ret);
+                    }
+                }
+            }
+          }
+      }
+  }
+#endif
+
   return ret;
 }
