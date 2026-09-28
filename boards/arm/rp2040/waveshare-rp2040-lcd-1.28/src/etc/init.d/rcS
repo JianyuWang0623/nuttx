@@ -1,0 +1,61 @@
+/****************************************************************************
+ * boards/arm/rp2040/waveshare-rp2040-lcd-1.28/src/etc/init.d/rcS
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ ****************************************************************************/
+
+#include <nuttx/config.h>
+
+/* This script "rcS" is executed after the rc.sysinit script.
+ *
+ * W5 startup orchestration:
+ *   - resetcause bootloader  -> ENTER_BOOTLOADER (SCRATCH magic): run
+ *     fastbootd with no timeout so it stays resident and the host can
+ *     update the AP partition over USB at any time.
+ *   - otherwise              -> normal boot: fastbootd <wait_ms> runs in
+ *     the foreground; if a client connects before the timeout, fastbootd
+ *     stays resident until the host triggers a reboot or boot via the
+ *     oem shell command -- it does not return on client disconnect;
+ *     if no client connects within wait_ms, fastbootd returns and boot
+ *     chains to the AP image via board_boot_image();  if boot returns
+ *     (AP image missing or corrupt), reboot so the next cold boot opens
+ *     a fresh fastbootd window for recovery without requiring physical
+ *     BOOTSEL.
+ *
+ * The resetcause output includes a trailing newline, so string comparison
+ * is unreliable.  Instead we redirect the output to a tmpfs file and use
+ * cmp against a pre-built reference that was generated with the same bytes.
+ */
+
+#ifdef CONFIG_SYSTEM_FASTBOOTD
+resetcause > /tmp/rc.txt
+if cmp /tmp/rc.txt /etc/rc.bootloader
+then
+  fastbootd &
+else
+  fastbootd 2000
+#ifdef CONFIG_BOARDCTL_BOOT_IMAGE
+  set +e
+  boot /dev/ap0 0x0
+  reboot
+#endif
+fi
+#elif defined(CONFIG_BOARDCTL_BOOT_IMAGE)
+boot /dev/ap0 0x0
+#endif

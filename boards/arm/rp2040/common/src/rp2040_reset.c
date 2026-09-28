@@ -28,11 +28,35 @@
 #include <nuttx/board.h>
 #include <nuttx/arch.h>
 
+#include <stdint.h>
 #include <sys/boardctl.h>
+#include <syslog.h>
 
+#include "arm_internal.h"
 #include "rp2040_rom.h"
+#include "hardware/rp2040_watchdog.h"
 
-#ifdef CONFIG_BOARDCTL_RESET
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Persist the "enter bootloader" request across a soft reset in a watchdog
+ * SCRATCH register.  The watchdog SCRATCH registers survive an armv6-m
+ * AIRCR SYSRESETREQ (up_systemreset), and SCRATCH2/3 do not collide with
+ * the bootrom watchdog-reboot region (SCRATCH4..7).  The reset cause is
+ * cleared on read so the bootloader only stays resident for the boot that
+ * was explicitly requested.
+ *
+ * SCRATCH2 is also usable by the watchdog driver (rp2040_wdt.c) via
+ * RP2040_WATCHDOG_SCRATCH(n).  Keep n != 2 if both are ever enabled in
+ * the same firmware; the current rp2040boot config does not enable WDT
+ * so there is no conflict today.
+ */
+
+#define RP2040_BOOTMAGIC_REG    RP2040_WATCHDOG_SCRATCH2
+#define RP2040_BOOTMAGIC_VALUE  0xb00710adu   /* "boot load" */
+
+#if defined(CONFIG_BOARDCTL_RESET) || defined(CONFIG_BOARDCTL_RESET_CAUSE)
 
 /****************************************************************************
  * Public Functions
@@ -58,14 +82,42 @@
  *
  ****************************************************************************/
 
+#ifdef CONFIG_BOARDCTL_RESET
 int board_reset(int status)
 {
+  syslog(LOG_INFO, "board_reset: status=%d "
+         "(ENTER_BOOTLOADER=%d ENTER_RECOVERY=%d)\n", status,
+         BOARDIOC_SOFTRESETCAUSE_ENTER_BOOTLOADER,
+         BOARDIOC_SOFTRESETCAUSE_ENTER_RECOVERY);
+
   if (status == BOARDIOC_SOFTRESETCAUSE_ENTER_BOOTLOADER)
     {
+      /* Ask the first-stage bootloader (firmware 1) to stay resident in
+       * fastboot after the reset.  Persist the request in a watchdog SCRATCH
+       * register and do a normal soft reset; the bootloader reads and clears
+       * it via board_reset_cause().  This intentionally does NOT drop into
+       * the ROM BOOTSEL: BOOTSEL is only the recovery path below.
+       */
+
+      putreg32(RP2040_BOOTMAGIC_VALUE, RP2040_BOOTMAGIC_REG);
+      up_systemreset();
+    }
+  else if (status == BOARDIOC_SOFTRESETCAUSE_ENTER_RECOVERY)
+    {
+      /* Recovery == last-resort brick-recovery path: drop into the RP2040
+       * ROM USB bootloader (BOOTSEL, VID:PID 2e8a:0003) so a uf2 can always
+       * be flashed even if both flash images are broken.  Reachable from the
+       * host via "fastboot oem ..." mapped to ENTER_RECOVERY, or nsh
+       * "reboot recovery".
+       */
+
       rom_reset_usb_boot_fn reset_usb_boot;
 
       reset_usb_boot = (rom_reset_usb_boot_fn)ROM_LOOKUP(ROM_RESET_USB_BOOT);
+      syslog(LOG_INFO, "board_reset: calling reset_usb_boot(%p)\n",
+             reset_usb_boot);
       reset_usb_boot(0, 0);
+      syslog(LOG_ERR, "board_reset: reset_usb_boot RETURNED (should not)\n");
     }
   else
     {
@@ -74,5 +126,48 @@ int board_reset(int status)
 
   return 0;
 }
-
 #endif /* CONFIG_BOARDCTL_RESET */
+
+#ifdef CONFIG_BOARDCTL_RESET_CAUSE
+
+/****************************************************************************
+ * Name: board_reset_cause
+ *
+ * Description:
+ *   Return the cause of the last reset.  On RP2040 the only persisted
+ *   soft-reset subreason we track is ENTER_BOOTLOADER, stored as a magic in
+ *   a watchdog SCRATCH register by board_reset().  The magic is cleared on
+ *   read so the request is one-shot: the bootloader stays resident only for
+ *   the boot that was explicitly requested, never permanently.  The
+ *   read-then-clear is not atomic (two bus accesses), but the sole caller
+ *   is rcS at early boot before any concurrent reader exists, so there is
+ *   no race.  If additional callers are added, serialise access to
+ *   RP2040_BOOTMAGIC_REG.
+ *
+ ****************************************************************************/
+
+int board_reset_cause(FAR struct boardioc_reset_cause_s *cause)
+{
+  uint32_t magic = getreg32(RP2040_BOOTMAGIC_REG);
+
+  if (magic == RP2040_BOOTMAGIC_VALUE)
+    {
+      /* Clear on read so we do not stay in the bootloader forever. */
+
+      putreg32(0, RP2040_BOOTMAGIC_REG);
+
+      cause->cause = BOARDIOC_RESETCAUSE_CPU_SOFT;
+      cause->flag  = BOARDIOC_SOFTRESETCAUSE_ENTER_BOOTLOADER;
+    }
+  else
+    {
+      cause->cause = BOARDIOC_RESETCAUSE_CPU_SOFT;
+      cause->flag  = BOARDIOC_SOFTRESETCAUSE_USER_REBOOT;
+    }
+
+  return 0;
+}
+
+#endif /* CONFIG_BOARDCTL_RESET_CAUSE */
+
+#endif /* CONFIG_BOARDCTL_RESET || CONFIG_BOARDCTL_RESET_CAUSE */
