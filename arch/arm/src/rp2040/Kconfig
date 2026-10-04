@@ -884,6 +884,18 @@ config RP2040_BOARD_HAS_WS2812
 		by ws2812.
 
 #####################################################################
+#  Flash MTD Configuration
+#####################################################################
+
+config RP2040_FLASH_MTD
+	bool "RP2040 flash MTD driver"
+	default n
+	select MTD
+	---help---
+		Enable the RP2040 flash MTD driver.  This provides raw
+		access to the on-chip QSPI flash as an MTD device.
+
+#####################################################################
 #  Flash File System Configuration
 #####################################################################
 
@@ -908,3 +920,49 @@ config RP2040_FLASH_MOUNT_POINT
 		mounting of the filesystem.
 
 endif # RP2040_FLASH_FILE_SYSTEM
+
+config RP2040_AP_FLASH_PART
+	bool "AP flash partition for bootloader ELF loading"
+	default n
+	select MTD
+	---help---
+		Create a raw flash partition for the AP (Application Processor)
+		ELF image.  The partition is exposed as a seekable character
+		device (/dev/apN) for the bootloader to read the AP ELF from
+		flash with libelf.  No filesystem is used - the ELF is written
+		directly to the raw partition.
+
+		The offset and size MUST match the "ap" entry of the board's
+		txtable partition table (src/etc/txtable.txt).  Both nodes then
+		address the same flash region with different access methods:
+		fastboot "flash ap" writes the raw MTD node /dev/ap registered
+		from the txtable, while the "boot" command reads the seekable
+		/dev/apN (MTD partition wrapped in FTL + BCH).  If the two ever
+		diverge, flashing and booting would target different regions.
+
+if RP2040_AP_FLASH_PART
+
+config RP2040_AP_FLASH_PART_MINOR
+	int "AP flash partition minor number"
+	default 0
+	---help---
+		Minor number for the /dev/apN device.  Default: 0
+
+config RP2040_AP_FLASH_PART_OFFSET
+	hex "AP flash partition offset from flash start"
+	default 0x80000
+	---help---
+		Offset in bytes from the start of flash (0x10000000) where
+		the AP image partition begins.  Must match the offset of the
+		"ap" partition in the board's txtable (src/etc/txtable.txt) and
+		sit past the bootloader region.  Default: 0x80000 (512KB)
+
+config RP2040_AP_FLASH_PART_SIZE
+	hex "AP flash partition size"
+	default 0x80000
+	---help---
+		Size of the AP flash partition in bytes.  Must match the size
+		of the "ap" partition in the board's txtable
+		(src/etc/txtable.txt).  Default: 0x80000 (512KB)
+
+endif # RP2040_AP_FLASH_PART
