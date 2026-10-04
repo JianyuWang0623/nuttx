@@ -4725,6 +4725,9 @@ endif
 if ARCH_BOARD_WAVESHARE_RP2040_ZERO
 source "boards/arm/rp2040/waveshare-rp2040-zero/Kconfig"
 endif
+if ARCH_BOARD_WAVESHARE_RP2040_LCD_1_28
+source "boards/arm/rp2040/waveshare-rp2040-lcd-1.28/Kconfig"
+endif
 if ARCH_BOARD_RASPBERRYPI_PICO_2
 source "boards/arm/rp23xx/raspberrypi-pico-2/Kconfig"
 endif
