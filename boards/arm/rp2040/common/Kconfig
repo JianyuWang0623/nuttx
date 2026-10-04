@@ -617,3 +617,35 @@ config RP2040_W5500_INT_GPIO
 		RP2040 pin number that connects to W5500 Interrupt
 
 endif # NET_W5500
+
+#####################################################################
+#  ELF Boot Support
+#####################################################################
+
+config RP2040_BOOT_ELF
+	bool "RP2040 ELF boot support"
+	default n
+	depends on ARCH_CHIP_RP2040
+	select BOARDCTL
+	select BOARDCTL_BOOT_IMAGE
+	---help---
+		Let board_boot_image() (invoked by the nsh "boot" command)
+		load an ET_EXEC/ET_DYN ELF image via libelf, relocate and
+		validate it, then jump to its _vectors entry.  Disables
+		interrupts, resets USBCTRL, sets MSP, and branches to the
+		reset handler.  If the image at the given path/offset is
+		not an ELF, board_boot_image() falls back to reading a raw
+		two-word ARM vector table instead.
+
+if RP2040_BOOT_ELF
+
+config RP2040_AP_BASE
+	hex "AP SRAM base address"
+	default 0x20007800
+	---help---
+		The base address where the application processor image will
+		be loaded in SRAM.  This must match the ORIGIN in the AP
+		SRAM linker script of the board.  The region below this
+		address is reserved for the bootloader.
+
+endif # RP2040_BOOT_ELF
