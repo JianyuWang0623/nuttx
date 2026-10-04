@@ -27,6 +27,21 @@
 #include <nuttx/mtd/mtd.h>
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define RP2040_XIP_BASE  0x10000000
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* Linker symbols defining the usable flash region */
+
+extern const uint8_t rp2040_smart_flash_start[];
+extern const uint8_t rp2040_smart_flash_end[];
+
+/****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
@@ -35,3 +50,14 @@
  ****************************************************************************/
 
 struct mtd_dev_s *rp2040_flash_mtd_initialize(void);
+
+/****************************************************************************
+ * Name: rp2040_flash_mtd_initialize_full
+ *
+ * Description:
+ *   Return an MTD instance that spans the whole flash chip (offset 0 ..
+ *   CONFIG_RP2040_FLASH_LENGTH) for use by the partition layer.
+ *
+ ****************************************************************************/
+
+struct mtd_dev_s *rp2040_flash_mtd_initialize_full(void);
