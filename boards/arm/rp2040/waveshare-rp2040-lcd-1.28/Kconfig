@@ -5,4 +5,34 @@
 
 if ARCH_BOARD_WAVESHARE_RP2040_LCD_1_28
 
+config RP2040_AP_IMAGE
+	bool "Build as AP image (SRAM-only, for bootloader loading)"
+	default n
+	---help---
+		Build the image as an AP (Application Processor) image that
+		will be loaded by the bootloader.  Uses the SRAM AP linker
+		script with ORIGIN at CONFIG_RP2040_AP_BASE.
+
+config RP2040_BOOTLOADER_DEBUG_NODES
+	bool "Expose first-stage bootloader debug/scaffolding device nodes"
+	default n
+	depends on RP2040_BOOT_ELF
+	---help---
+		Register the bring-up scaffolding character/MTD nodes used while
+		developing the first-stage bootloader: the whole-chip flash node
+		/dev/rpflashall, the txtable helpers /dev/txtable_mk and
+		/dev/txtable_erase, and the MTD-path probe /dev/flash_probe.
+
+		These nodes expose write access to the entire flash (including the
+		bootloader partition itself).  Filesystem permission bits are not
+		enforced in this configuration (CONFIG_FS_PERMISSION=n), so a node
+		that is readable is also writable.  Leave this off in a production
+		bootloader: its flash is updated only through the ROM BOOTSEL path
+		with a host tool (picotool), so there is no legitimate run-time
+		writer for the bootloader region, and a stray "fastboot flash
+		rpflashall" would erase the running image.
+
+		Enable it only for local bring-up when the extra observability or
+		manual triggers are needed.
+
 endif
