@@ -1,0 +1,4 @@
+TXTABLE0
+bootloader 80000 0
+ap 80000 80000
+boot_staging 80000 100000

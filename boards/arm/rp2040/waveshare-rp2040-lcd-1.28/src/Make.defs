@@ -29,6 +29,17 @@ ifeq ($(CONFIG_DEV_GPIO),y)
 CSRCS += rp2040_gpio.c
 endif
 
+# Provide the default txtable partition table as /etc/txtable.txt.  The common
+# board etc-ROMFS mechanism (CONFIG_ETC_ROMFS) bakes src/etc/txtable.txt into
+# the /etc ROMFS, which the txtable parser uses as its backup source when the
+# on-flash primary table is missing or corrupt.
+
+ifeq ($(CONFIG_ETC_ROMFS),y)
+ifeq ($(CONFIG_TXTABLE_PARTITION),y)
+  RCRAWS += etc/txtable.txt
+endif
+endif
+
 DEPPATH += --dep-path board
 VPATH += :board
 CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board
