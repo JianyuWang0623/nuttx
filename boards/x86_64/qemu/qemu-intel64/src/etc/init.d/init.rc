@@ -25,6 +25,10 @@
 #ifdef CONFIG_SYSTEM_NSH
 service console sh
    restart_period 1000
+#if defined(CONFIG_SYSLOG_CHARDEV) && defined(CONFIG_SYSTEM_NXINIT_SERVICE_REDIR)
+   stdout /dev/log
+   stderr /dev/log
+#endif
 #endif
 
 on init
