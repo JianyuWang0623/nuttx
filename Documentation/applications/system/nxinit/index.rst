@@ -233,6 +233,8 @@ These are the built-in commands of NXInit:
 - Service management: ``start``/``stop`` (start/stop a service),
   ``exec_start`` (start a service and wait until it exits),
   ``class_start``/``class_stop`` (start/stop all services of a class).
+- Waiting: ``wait`` (wait for a file), ``wait_for_prop`` (wait for a
+  system property, see below).
 - Programs: ``exec -- <program> [<argument>]*`` (run a program and wait until
   it exits).
 - Others: ``trigger`` (trigger an event), and ``netinit``, ``boot``,
@@ -283,6 +285,34 @@ removes the request. ``<state>`` is ``normal``, ``idle``, ``standby`` or
 arguments dumps the PM statistics; NXInit does not have that form, which
 init does not need. With ``CONFIG_PM`` disabled, NXInit has no
 ``pmconfig`` command.
+
+Waiting for a File or Property
+------------------------------
+
+.. code-block::
+
+    wait <path> [<timeout>]
+    wait_for_prop <name> <value>
+
+``wait`` polls for the existence of ``<path>`` and returns when the file
+is found. ``<timeout>`` is in seconds and may be fractional; it defaults
+to 5. When the timeout is reached, the command only warns and continues,
+so the next command still runs.
+
+``wait_for_prop`` returns when the system property ``<name>`` is exactly
+``<value>``. A property that is already set returns right away. While it
+waits, the command queue is held, but services and property backends
+keep running, as Android init holds its command queue for the same
+command. The value therefore has to come from outside the queue or
+already be set: a ``setprop`` later in the queue cannot satisfy the
+wait. Only one ``wait_for_prop`` waits at a time, and a second one fails
+until the first is done.
+
+.. code-block::
+
+    on boot
+        wait /var/run/dbus/system_bus_socket
+        start dbus_user
 
 Compound Commands
 ------------------
